@@ -1,4 +1,5 @@
 #include "CRecoverySchedulerStubImpl.hpp"
+#include "Logger.hpp"
 #include <CommonAPI/CommonAPI.hpp>
 #define COMMONAPI_INTERNAL_COMPILATION
 #include <CommonAPI/DBus/DBusClientId.hpp>
@@ -68,8 +69,7 @@ void CRecoverySchedulerStubImpl::registerService(const std::shared_ptr<CommonAPI
             const pid_t lPid = queryUnixPidForBusName(lUniqueBusName);
             std::lock_guard<std::mutex> lock(m_NameMutex);
             m_ServiceToBusName[serviceName] = PeerInfo{lUniqueBusName, lPid};
-            std::cout << "Watching D-Bus name '" << lUniqueBusName
-                      << "' (pid=" << lPid << ") for service '" << serviceName << "'" << std::endl;
+            LOG_INFO("SRSC", "DBUS", "watching bus name '" << lUniqueBusName << "' pid=" << lPid << " for service '" << serviceName << "'");
         }
     }
     reply(isOk ? GeneratedIface::RegisterResult::OK : GeneratedIface::RegisterResult::INVALID_NAME);
@@ -126,8 +126,7 @@ void CRecoverySchedulerStubImpl::handleNameOwnerChanged(const std::string &name,
         }
         if (!lStrAffectedService.empty())
         {
-            std::cout << "D-Bus peer lost for service '" << lStrAffectedService
-                      << "' (bus name " << name << ", pid=" << lPid << ") - driving recovery" << std::endl;
+            LOG_ERROR("SRSC", "DBUS", "peer lost service='" << lStrAffectedService << "' bus=" << name << " pid=" << lPid << " - driving recovery");
             if (onServiceFailure)
             {
                 onServiceFailure(lStrAffectedService);
@@ -172,7 +171,7 @@ bool CRecoverySchedulerStubImpl::run(std::shared_ptr<CRecoverySchedulerStubImpl>
     {
         if (lRuntime->registerService(domain, instance, self))
         {
-            std::cout << "CommonAPI service registered: " << domain << ":" << instance << std::endl;
+            LOG_INFO("SRSC", "CAPI", "CommonAPI service registered " << domain << ":" << instance);
 
             // Subscribe to org.freedesktop.DBus.NameOwnerChanged on the very same
             // D-Bus connection CommonAPI already owns for this service.

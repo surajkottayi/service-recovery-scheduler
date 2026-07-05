@@ -10,6 +10,7 @@
 #include <iostream>
 #include <thread>
 #include "Common.hpp"
+#include "Logger.hpp"
 using namespace lib_srs;
 
 namespace srs = ::v1::com::bmw::recovery;
@@ -23,15 +24,15 @@ int main()
     if (proxy)
     {
 
-        std::cout << lAppName << ": waiting for scheduler to be available...\n";
+        LOG_INFO("APPA", "MAIN", "waiting for scheduler to be available...");
         while (!proxy->isAvailable())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
         proxy->getServiceStateChangedEvent().subscribe([lAppName](const std::string &name, srs::RecoveryScheduler::RecoveryState st)
-                                                       { std::cout << lAppName << ": state changed name=" << name
-                                                                   << " action=" << static_cast<int>(st) << std::endl; });
+                                                       { LOG_INFO("APPA", "EVT ", "state changed name=" << name
+                                                                                                        << " action=" << static_cast<int>(st)); });
 
         CommonAPI::CallStatus status{};
         srs::RecoveryScheduler::RegisterResult result{};
@@ -45,7 +46,8 @@ int main()
                                status,
                                result);
 
-        std::cout << lAppName << ": register status=" << static_cast<int>(status) << " result=" << static_cast<int>(result) << std::endl;
+        LOG_INFO("APPA", "MAIN", "register status=" << static_cast<int>(status)
+                                                    << " result=" << static_cast<int>(result));
 
         while (true)
         {

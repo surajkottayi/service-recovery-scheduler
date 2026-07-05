@@ -1,66 +1,20 @@
 #include "CRecoveryScheduler.hpp"
 #include "CRecoverySchedulerStubImpl.hpp"
-
+#include "Logger.hpp"
 using namespace lib_srs;
 
 CRecoveryScheduler::CRecoveryScheduler() : m_StubImpl(std::make_shared<CRecoverySchedulerStubImpl>())
 {
 }
 
-CRecoveryScheduler::~CRecoveryScheduler() = default;
-
 std::shared_ptr<CRecoveryScheduler> CRecoveryScheduler::getInstance()
 {
     static std::shared_ptr<CRecoveryScheduler> instance(new CRecoveryScheduler());
     return instance;
 }
-void CRecoveryScheduler::startSignalMonitor()
-{
-
-    if (m_FutSigMonitor.valid())
-    {
-        std::cout << "Signal monitor already running." << std::endl;
-    }
-    else
-    {
-        // Block SIGCHLD so only sigtimedwait() consumes it (inherited by watcher).
-        sigset_t mask;
-        sigemptyset(&mask);
-        sigaddset(&mask, SIGCHLD);
-        pthread_sigmask(SIG_BLOCK, &mask, nullptr);
-        m_IsRunning.store(true);
-        m_FutSigMonitor = std::async(std::launch::async, &CRecoveryScheduler::signalMonitor, this);
-        std::cout << "Signal monitor started." << std::endl;
-    }
-}
-
-void CRecoveryScheduler::signalMonitor()
-{
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGCHLD);
-
-    const timespec timeout{1, 0}; // 1 s wake-up to re-check m_IsRunning
-
-    while (true)
-    {
-    }
-
-    std::cout << "Signal monitor stopped." << std::endl;
-}
-
-void CRecoveryScheduler::stopSignalMonitor()
-{
-    m_IsRunning.store(false);
-    if (m_FutSigMonitor.valid())
-    {
-        m_FutSigMonitor.get();
-    }
-}
-
 void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
 {
-    std::cout << "Service failure detected for: " << serviceName << std::endl;
+    LOG_WARN("SRSC", "CORE", "service failure detected: " << serviceName);
 
     std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
     auto itFind = std::find_if(m_MapServiceInfo.begin(), m_MapServiceInfo.end(),
@@ -72,8 +26,7 @@ void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
         ++info.recoveryActionCount;
         info.recoveryActionCount = (info.recoveryActionCount == static_cast<int8_t>(info.recoveryActions.size())) ? 0 : info.recoveryActionCount; // wrap around to the first action
         const RecoveryState lNextState = info.recoveryActions[static_cast<size_t>(info.recoveryActionCount)];
-        std::cout << "info.recoveryActionCount " << static_cast<int>(info.recoveryActionCount) << std::endl;
-        std::cout << "lNextState " << toString(lNextState) << std::endl;
+        LOG_DEBUG("SRSC", "CORE", "attempt=" << static_cast<int>(info.recoveryActionCount) << " nextAction=" << toString(lNextState));
 
         switch (lNextState)
         {
@@ -93,9 +46,9 @@ void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
 }
 bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval)
 {
-    pid_t pid; // TODO : to find PID
+    pid_t pid = -1; // TODO : populate from D-Bus caller (GetConnectionUnixProcessID)
     bool isNameValid = false;
-    std::cout << "registerService " << serviceName << " pid=" << pid << std::endl;
+    LOG_DEBUG("SRSC", "CORE", "registerService req name=" << serviceName << " pid=" << pid);
 
     auto itFind = m_MapServiceInfo.find(serviceName);
     if (itFind == m_MapServiceInfo.end())
@@ -126,18 +79,18 @@ bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const
                 std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
                 m_MapServiceInfo[serviceName] = std::move(lServiceInfo);
             }
-            std::cout << "Service registered: " << serviceName << " pid=" << pid << std::endl;
+            LOG_INFO("SRSC", "CORE", "service registered: " << serviceName << " pid=" << pid);
         }
         else
         {
-            std::cout << "Invalid service name: " << serviceName << std::endl;
+            LOG_ERROR("SRSC", "CORE", "invalid service name: " << serviceName);
             isNameValid = false;
         }
     }
     else
     {
         isNameValid = true;
-        std::cout << "Already registered service: " << serviceName << std::endl;
+        LOG_WARN("SRSC", "CORE", "already registered service: " << serviceName);
     }
     return isNameValid;
 }

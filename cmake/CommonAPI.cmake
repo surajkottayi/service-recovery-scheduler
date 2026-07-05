@@ -256,6 +256,26 @@ if(TARGET CommonAPI-DBus AND NOT TARGET CommonAPI::DBus)
     add_library(CommonAPI::DBus ALIAS CommonAPI-DBus)
 endif()
 
+# Silence the flood of `std::unary_function`/`binary_function` C++17
+# deprecation warnings coming from CommonAPI's own headers by re-exposing their
+# INTERFACE_INCLUDE_DIRECTORIES as SYSTEM includes. GCC/Clang skip most
+# warnings for headers found via -isystem. (CMake 3.25+ has a per-target SYSTEM
+# property; the manual swap keeps us portable to 3.16.)
+foreach(_capi_tgt CommonAPI CommonAPI-DBus)
+    if(TARGET ${_capi_tgt})
+        get_target_property(_capi_incs ${_capi_tgt} INTERFACE_INCLUDE_DIRECTORIES)
+        if(_capi_incs)
+            set_target_properties(${_capi_tgt} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
+            target_include_directories(${_capi_tgt} SYSTEM INTERFACE ${_capi_incs})
+        endif()
+        # And silence them while compiling the CommonAPI libraries themselves
+        # (their own TUs consume the same headers via PRIVATE include dirs).
+        # These are third-party sources — suppress all warnings for their
+        # object files but keep our own targets strict.
+        target_compile_options(${_capi_tgt} PRIVATE -w)
+    endif()
+endforeach()
+
 # ---- Generators (downloaded on demand) --------------------------------------
 set(_capi_tools_root ${CMAKE_BINARY_DIR}/_deps/commonapi-tools)
 file(MAKE_DIRECTORY ${_capi_tools_root})

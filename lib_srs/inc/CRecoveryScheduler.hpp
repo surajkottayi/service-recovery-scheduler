@@ -42,16 +42,12 @@ namespace lib_srs
     {
     public:
         [[nodiscard]] static std::shared_ptr<CRecoveryScheduler> getInstance();
-        ~CRecoveryScheduler(); // out-of-line: shared_ptr to incomplete type
+        ~CRecoveryScheduler() = default; // out-of-line: shared_ptr to incomplete type
 
         bool onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval = -1);
         bool onUnregisterService(const std::string &serviceName);
         void init();
         void run();
-        void startSignalMonitor();
-
-        // Public so external monitors (SIGCHLD watcher, D-Bus NameOwnerChanged
-        // watcher) can trigger the recovery flow for a registered service.
         void onServiceFailure(const std::string &serviceName);
 
     private:
@@ -61,18 +57,8 @@ namespace lib_srs
         CRecoveryScheduler(CRecoveryScheduler &&) = delete;
         CRecoveryScheduler &operator=(CRecoveryScheduler &&) = delete;
 
-        void signalMonitor();
-        void stopSignalMonitor();
-
         std::unordered_map<std::string, SServiceRecoveryInfo> m_MapServiceInfo;
         std::mutex m_MutxServiceInfo;
-
-        std::thread m_watcherThread;
-        std::atomic_bool m_IsRunning{false};
-        std::future<void> m_FutSigMonitor;
-
-        // Exposes the scheduler on the session bus via CommonAPI so that
-        // AppA/B/C can register themselves remotely.
         std::shared_ptr<CRecoverySchedulerStubImpl> m_StubImpl;
     };
 
