@@ -1,20 +1,20 @@
-// CommonAPI D-Bus deployment for ServiceRecoveryScheduler.
+// CommonAPI D-Bus deployment for RecoveryScheduler.
 //
 // This file is consumed by the commonapi_dbus_generator to emit the D-Bus
 // binding code. It intentionally keeps deployment minimal — the default
 // mapping is fine for a single-machine deployment on the session bus.
 //
 // Generate with:
-//   commonapi-dbus-generator -d gen/dbus ServiceRecoveryScheduler-DBus.fdepl
+//   commonapi-dbus-generator -d gen/dbus RecoveryScheduler-DBus.fdepl
 
 import "platform:/plugin/org.genivi.commonapi.dbus/deployment/CommonAPI-DBus_deployment_spec.fdepl"
-import "ServiceRecoveryScheduler.fidl"
+import "RecoveryScheduler.fidl"
 
-define org.genivi.commonapi.dbus.deployment for interface com.bmw.recovery.ServiceRecoveryScheduler {
+define org.genivi.commonapi.dbus.deployment for interface com.bmw.recovery.RecoveryScheduler {
 }
 
 define org.genivi.commonapi.dbus.deployment for provider as RecoverySchedulerProvider {
-    instance com.bmw.recovery.ServiceRecoveryScheduler {
-        InstanceId = "com.bmw.recovery.ServiceRecoveryScheduler"
+    instance com.bmw.recovery.RecoveryScheduler {
+        InstanceId = "com.bmw.recovery.RecoveryScheduler"
     }
 }

@@ -1,10 +1,10 @@
-// AppC — sample CommonAPI D-Bus client for ServiceRecoveryScheduler.
+// AppC — sample CommonAPI D-Bus client for RecoveryScheduler.
 //
 // Enrolls itself with the scheduler and subscribes to state-change broadcasts.
 // Runtime routing is picked from $COMMONAPI_CONFIG (see fidl/commonapi4dbus.ini).
 
 #include <CommonAPI/CommonAPI.hpp>
-#include <v1/com/bmw/recovery/ServiceRecoverySchedulerProxy.hpp>
+#include <v1/com/bmw/recovery/RecoverySchedulerProxy.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -17,7 +17,7 @@ int main()
 
     auto runtime = CommonAPI::Runtime::get();
     std::string lAppName = g_MapServiceNames[ServiceId::APP_C];
-    auto proxy = runtime->buildProxy<srs::ServiceRecoverySchedulerProxy>("local", "com.bmw.recovery.ServiceRecoveryScheduler", lAppName);
+    auto proxy = runtime->buildProxy<srs::RecoverySchedulerProxy>("local", "com.bmw.recovery.RecoveryScheduler", lAppName);
 
     if (proxy)
     {
@@ -28,21 +28,21 @@ int main()
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
-        proxy->getServiceStateChangedEvent().subscribe([lAppName](const std::string &name, srs::ServiceRecoveryScheduler::RecoveryState st)
+        proxy->getServiceStateChangedEvent().subscribe([lAppName](const std::string &name, srs::RecoveryScheduler::RecoveryState st)
                                                        { std::cout << lAppName << ": state changed name=" << name
                                                                    << " action=" << static_cast<int>(st) << std::endl; });
 
-        CommonAPI::CallStatus status{};
-        srs::ServiceRecoveryScheduler::RegisterResult result{};
+        CommonAPI::CallStatus lStatus{};
+        srs::RecoveryScheduler::RegisterResult result{};
         proxy->registerService(lAppName,
-                               {srs::ServiceRecoveryScheduler::RecoveryState::RESTART,
-                                srs::ServiceRecoveryScheduler::RecoveryState::STOP,
-                                srs::ServiceRecoveryScheduler::RecoveryState::DISABLE},
+                               {srs::RecoveryScheduler::RecoveryState::DISABLE,
+                                srs::RecoveryScheduler::RecoveryState::RESTART,
+                                srs::RecoveryScheduler::RecoveryState::STOP},
                                -1,
-                               status,
+                               lStatus,
                                result);
 
-        std::cout << lAppName << ": register status=" << static_cast<int>(status) << " result=" << static_cast<int>(result) << std::endl;
+        std::cout << lAppName << ": register status=" << static_cast<int>(lStatus) << " result=" << static_cast<int>(result) << std::endl;
 
         while (true)
         {

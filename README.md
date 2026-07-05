@@ -2,6 +2,17 @@
 A small C++ library that manages recovery actions for a set of monitored services,
 exposed to other processes as a **CommonAPI D-Bus** service.
 
+
+#Assumptions
+- Modern app => modern c++ (> = c++11 is preferred), choosing c++14
+- Prefered Environment => Linux
+- Apps are connected to the scheduler over dbus
+
+
+#decisions
+-Common api shall be downloaded and compiled for this project
+
+
 ## Layout
 
 ```
@@ -26,8 +37,8 @@ On the first `cmake` configure, `cmake/CommonAPI.cmake` will:
    - `commonapi_core_generator` (`CAPICXX_CORE_TOOLS_VERSION`, default `3.2.15`)
    - `commonapi_dbus_generator` (`CAPICXX_DBUS_TOOLS_VERSION`, default `3.2.15`)
 3. Expose a helper `commonapi_generate_stubs(TARGET ... FIDL ... FDEPL ...)` that
-   runs both generators against `fidl/ServiceRecoveryScheduler.fidl` and
-   `fidl/ServiceRecoveryScheduler-DBus.fdepl` and turns the generated C++ into
+   runs both generators against `fidl/RecoveryScheduler.fidl` and
+   `fidl/RecoveryScheduler-DBus.fdepl` and turns the generated C++ into
    an OBJECT library named `srs_capi_stubs`.
 
 Override any version on the command line:
@@ -68,7 +79,7 @@ sudo apt install build-essential cmake pkg-config libdbus-1-dev \
 cmake -S . -B build
 cmake --build build -j
 
-# Tell the CommonAPI runtime how to route ServiceRecoveryScheduler over D-Bus
+# Tell the CommonAPI runtime how to route RecoveryScheduler over D-Bus
 export COMMONAPI_CONFIG=$PWD/fidl/commonapi4dbus.ini
 export COMMONAPI_DBUS_DEFAULT_CONFIG=$PWD/fidl/commonapi4dbus.ini
 
@@ -83,12 +94,12 @@ export COMMONAPI_DBUS_DEFAULT_CONFIG=$PWD/fidl/commonapi4dbus.ini
 
 - `lib_srs::CRecoveryScheduler` — the core in-process scheduler (unchanged
   behaviour).
-- `lib_srs::ServiceRecoverySchedulerStubImpl` — thin D-Bus skeleton that inherits
-  from the generated `ServiceRecoverySchedulerStubDefault` and delegates
+- `lib_srs::RecoverySchedulerStubImpl` — thin D-Bus skeleton that inherits
+  from the generated `RecoverySchedulerStubDefault` and delegates
   `registerService` / `unregisterService` to `CRecoveryScheduler`, and fires
   the `serviceStateChanged` broadcast.
 - `other_apps/appA.cpp` — reference client. Builds a
-  `ServiceRecoverySchedulerProxy`, subscribes to `serviceStateChanged`, and
+  `RecoverySchedulerProxy`, subscribes to `serviceStateChanged`, and
   calls `registerService("AppA", ...)` remotely.
 
 ## Regenerating stubs
@@ -103,7 +114,7 @@ cmake --build build --target srs_capi_stubs_generate
 
 ## SOME/IP note
 
-The legacy `fidl/ServiceRecoveryScheduler.fdepl` (SOME/IP) is kept for
+The legacy `fidl/RecoveryScheduler.fdepl` (SOME/IP) is kept for
 reference but is not wired into the build. Switch to SOME/IP by adding the
 matching runtime (`capicxx-someip-runtime` + `vsomeip3`) in
 `cmake/CommonAPI.cmake` and pointing `commonapi_generate_stubs` at the

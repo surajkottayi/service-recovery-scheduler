@@ -19,6 +19,8 @@
 namespace fs = std::filesystem;
 namespace lib_srs
 {
+    class CRecoverySchedulerStubImpl; // fwd-decl: full type in CRecoverySchedulerStubImpl.hpp
+
     typedef struct _SServiceRecoveryInfo
     {
         std::string serviceName;
@@ -40,11 +42,12 @@ namespace lib_srs
     {
     public:
         [[nodiscard]] static std::shared_ptr<CRecoveryScheduler> getInstance();
-        ~CRecoveryScheduler() = default;
+        ~CRecoveryScheduler(); // out-of-line: shared_ptr to incomplete type
 
-        bool registerService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval = -1);
-        bool unregisterService(const std::string &serviceName);
+        bool onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval = -1);
+        bool onUnregisterService(const std::string &serviceName);
         void init();
+        void run();
         void startSignalMonitor();
 
         // Public so external monitors (SIGCHLD watcher, D-Bus NameOwnerChanged
@@ -52,7 +55,7 @@ namespace lib_srs
         void onServiceFailure(const std::string &serviceName);
 
     private:
-        CRecoveryScheduler() = default;
+        CRecoveryScheduler(); // out-of-line: shared_ptr to incomplete type
         CRecoveryScheduler(const CRecoveryScheduler &) = delete;
         CRecoveryScheduler &operator=(const CRecoveryScheduler &) = delete;
         CRecoveryScheduler(CRecoveryScheduler &&) = delete;
@@ -61,12 +64,16 @@ namespace lib_srs
         void signalMonitor();
         void stopSignalMonitor();
 
-        std::unordered_map<pid_t, SServiceRecoveryInfo> m_MapServiceInfo;
+        std::unordered_map<std::string, SServiceRecoveryInfo> m_MapServiceInfo;
         std::mutex m_MutxServiceInfo;
 
         std::thread m_watcherThread;
         std::atomic_bool m_IsRunning{false};
         std::future<void> m_FutSigMonitor;
+
+        // Exposes the scheduler on the session bus via CommonAPI so that
+        // AppA/B/C can register themselves remotely.
+        std::shared_ptr<CRecoverySchedulerStubImpl> m_StubImpl;
     };
 
 } // namespace lib_srs

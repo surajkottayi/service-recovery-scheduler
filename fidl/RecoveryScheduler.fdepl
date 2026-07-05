@@ -1,12 +1,12 @@
-// SOME/IP deployment for ServiceRecoveryScheduler.
+// SOME/IP deployment for RecoveryScheduler.
 // Assigns concrete IDs required by the SOME/IP wire protocol.
 //
 // Pick your own IDs — these must not collide with other services on the bus.
 
 import "platform:/plugin/org.genivi.commonapi.someip/deployment/CommonAPI-SOMEIP_deployment_spec.fdepl"
-import "ServiceRecoveryScheduler.fidl"
+import "RecoveryScheduler.fidl"
 
-define org.genivi.commonapi.someip.deployment for interface com.bmw.recovery.ServiceRecoveryScheduler {
+define org.genivi.commonapi.someip.deployment for interface com.bmw.recovery.RecoveryScheduler {
     SomeIpServiceID = 0x1234
 
     method registerService {
@@ -26,8 +26,8 @@ define org.genivi.commonapi.someip.deployment for interface com.bmw.recovery.Ser
 }
 
 define org.genivi.commonapi.someip.deployment for provider RecoverySchedulerProvider {
-    instance com.bmw.recovery.ServiceRecoveryScheduler {
-        InstanceId = "com.bmw.recovery.ServiceRecoveryScheduler"
+    instance com.bmw.recovery.RecoveryScheduler {
+        InstanceId = "com.bmw.recovery.RecoveryScheduler"
 
         SomeIpInstanceID       = 0x0001
         SomeIpUnicastAddress   = "127.0.0.1"

@@ -2,6 +2,7 @@
 #define Common_HPP
 #include <cstdint>
 #include <limits>
+#include <ostream>
 #include <string>
 #include <vector>
 #include <queue>
@@ -21,6 +22,32 @@ namespace lib_srs
         DISABLE = 2,
         UNKNOWN = std::numeric_limits<uint8_t>::max()
     };
+
+    inline const std::string toString(RecoveryState state)
+    {
+        std::string lStrRet = "";
+        switch (state)
+        {
+        case RecoveryState::RESTART:
+            lStrRet = "RESTART";
+            break;
+        case RecoveryState::STOP:
+            lStrRet = "STOP";
+            break;
+        case RecoveryState::DISABLE:
+            lStrRet = "DISABLE";
+            break;
+        case RecoveryState::UNKNOWN:
+            lStrRet = "UNKNOWN";
+            break;
+        }
+        return lStrRet;
+    }
+
+    inline std::ostream &operator<<(std::ostream &os, RecoveryState state)
+    {
+        return os << toString(state);
+    }
     enum class ServiceId : uint32_t
     {
         APP_A = 2100,
@@ -67,6 +94,7 @@ namespace lib_srs
             {ServiceId::APP_R, "AppR"},
             {ServiceId::APP_S, "AppS"},
             {ServiceId::APP_T, "AppT"}};
+
 } // namespace lib_srs
 
 #endif

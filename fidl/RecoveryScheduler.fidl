@@ -5,12 +5,12 @@
 // them and take recovery actions on failure.
 //
 // Generate CommonAPI stubs with:
-//   commonapi-core-generator -sk -d gen ServiceRecoveryScheduler.fidl
-//   commonapi-someip-generator     -d gen ServiceRecoveryScheduler.fdepl
+//   commonapi-core-generator -sk -d gen RecoveryScheduler.fidl
+//   commonapi-someip-generator     -d gen RecoveryScheduler.fdepl
 
 package com.bmw.recovery
 
-interface ServiceRecoveryScheduler {
+interface RecoveryScheduler {
     version { major 1 minor 0 }
 
     // Mirrors lib_srs::RecoveryState in Common.hpp
