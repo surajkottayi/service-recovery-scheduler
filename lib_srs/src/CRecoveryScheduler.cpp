@@ -37,38 +37,6 @@ void CRecoveryScheduler::signalMonitor()
 
     while (true)
     {
-        siginfo_t sinfo{};
-        if (sigtimedwait(&mask, &sinfo, &timeout) != SIGCHLD)
-        {
-            continue; // timeout or non-target signal
-        }
-
-        int status{};
-        const pid_t pid = waitpid(sinfo.si_pid, &status, WNOHANG);
-        if (pid <= 0)
-            continue;
-
-        const bool crashed = WIFSIGNALED(status);
-        const bool failed = WIFEXITED(status) && WEXITSTATUS(status) != 0;
-        if (!(crashed || failed))
-            continue;
-
-        // Look up which registered service this PID belongs to.
-        std::string serviceName;
-        {
-            std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
-            auto it = m_MapServiceInfo.find(pid);
-            if (it == m_MapServiceInfo.end())
-                continue; // not one of ours — ignore
-            serviceName = it->second.serviceName;
-        }
-
-        std::cout << "Service crash: " << serviceName << " (PID " << pid << ")"
-                  << (crashed ? " signal=" : " exit=")
-                  << (crashed ? WTERMSIG(status) : WEXITSTATUS(status))
-                  << std::endl;
-
-        onServiceFailure(serviceName);
     }
 
     std::cout << "Signal monitor stopped." << std::endl;
@@ -76,13 +44,11 @@ void CRecoveryScheduler::signalMonitor()
 
 void CRecoveryScheduler::stopSignalMonitor()
 {
-    m_IsRunning = false;
+    m_IsRunning.store(false);
     if (m_FutSigMonitor.valid())
+    {
         m_FutSigMonitor.get();
-}
-
-CRecoveryScheduler::CRecoveryScheduler()
-{
+    }
 }
 
 void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
@@ -91,8 +57,8 @@ void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
 
     std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
     auto itFind = std::find_if(m_MapServiceInfo.begin(), m_MapServiceInfo.end(),
-                           [&](const auto &kv)
-                           { return kv.second.serviceName == serviceName; });
+                               [&](const auto &kv)
+                               { return kv.second.serviceName == serviceName; });
     if (itFind != m_MapServiceInfo.end())
     {
         SServiceRecoveryInfo &info = itFind->second;

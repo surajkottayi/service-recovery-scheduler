@@ -1,10 +1,53 @@
-#include "CRecoveryScheduler.hpp"
+// AppA — sample CommonAPI D-Bus client for ServiceRecoveryScheduler.
+//
+// Enrolls itself with the scheduler and subscribes to state-change broadcasts.
+// Runtime routing is picked from $COMMONAPI_CONFIG (see fidl/commonapi4dbus.ini).
+
+#include <CommonAPI/CommonAPI.hpp>
+#include <v1/com/bmw/recovery/ServiceRecoverySchedulerProxy.hpp>
+
+#include <chrono>
+#include <iostream>
+#include <thread>
+#include "Common.hpp"
 using namespace lib_srs;
+
+namespace srs = ::v1::com::bmw::recovery;
 
 int main()
 {
-    // auto lRecoveryScheduler = CRecoveryScheduler::getInstance();
-    // lRecoveryScheduler->registerService("AppA", {RecoveryState::RESTART, RecoveryState::STOP, RecoveryState::DISABLE});
+    auto runtime = CommonAPI::Runtime::get();
+    std::string lAppName = g_MapServiceNames[ServiceId::APP_A];
+    auto proxy = runtime->buildProxy<srs::ServiceRecoverySchedulerProxy>("local", "com.bmw.recovery.ServiceRecoveryScheduler", lAppName);
 
-    return 0;
+    if (proxy)
+    {
+
+        std::cout << lAppName << ": waiting for scheduler to be available...\n";
+        while (!proxy->isAvailable())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+
+        proxy->getServiceStateChangedEvent().subscribe([lAppName](const std::string &name, srs::ServiceRecoveryScheduler::RecoveryState st)
+                                                       { std::cout << lAppName << ": state changed name=" << name
+                                                                   << " action=" << static_cast<int>(st) << std::endl; });
+
+        CommonAPI::CallStatus status{};
+        srs::ServiceRecoveryScheduler::RegisterResult result{};
+        proxy->registerService(lAppName,
+                               {srs::ServiceRecoveryScheduler::RecoveryState::RESTART,
+                                srs::ServiceRecoveryScheduler::RecoveryState::STOP,
+                                srs::ServiceRecoveryScheduler::RecoveryState::DISABLE},
+                               -1,
+                               status,
+                               result);
+
+        std::cout << lAppName << ": register status=" << static_cast<int>(status) << " result=" << static_cast<int>(result) << std::endl;
+
+        while (true)
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
 }

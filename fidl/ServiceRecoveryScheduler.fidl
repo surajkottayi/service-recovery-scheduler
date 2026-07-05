@@ -8,7 +8,7 @@
 //   commonapi-core-generator -sk -d gen ServiceRecoveryScheduler.fidl
 //   commonapi-someip-generator     -d gen ServiceRecoveryScheduler.fdepl
 
-package com.toyota.recovery
+package com.bmw.recovery
 
 interface ServiceRecoveryScheduler {
     version { major 1 minor 0 }

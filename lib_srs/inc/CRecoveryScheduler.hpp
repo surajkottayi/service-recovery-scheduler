@@ -46,9 +46,13 @@ namespace lib_srs
         bool unregisterService(const std::string &serviceName);
         void init();
         void startSignalMonitor();
-        
+
+        // Public so external monitors (SIGCHLD watcher, D-Bus NameOwnerChanged
+        // watcher) can trigger the recovery flow for a registered service.
+        void onServiceFailure(const std::string &serviceName);
+
     private:
-        CRecoveryScheduler();
+        CRecoveryScheduler() = default;
         CRecoveryScheduler(const CRecoveryScheduler &) = delete;
         CRecoveryScheduler &operator=(const CRecoveryScheduler &) = delete;
         CRecoveryScheduler(CRecoveryScheduler &&) = delete;
@@ -56,12 +60,10 @@ namespace lib_srs
 
         void signalMonitor();
         void stopSignalMonitor();
-        // Called by the watcher thread when SIGCHLD arrives.
-        void onServiceFailure(const std::string &serviceName);
 
         std::unordered_map<pid_t, SServiceRecoveryInfo> m_MapServiceInfo;
         std::mutex m_MutxServiceInfo;
-        
+
         std::thread m_watcherThread;
         std::atomic_bool m_IsRunning{false};
         std::future<void> m_FutSigMonitor;

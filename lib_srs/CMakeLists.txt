@@ -9,7 +9,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<INSTALL_INTERFACE:include>)
 find_package(PkgConfig)
 pkg_check_modules(SYSTEMD libsystemd)
-target_link_libraries(${PROJECT_NAME} PUBLIC pthread ${SYSTEMD_LIBRARIES})
+
+# Link the generated CommonAPI (core+dbus) stubs plus their transitive
+# runtime dependencies (CommonAPI::Core, CommonAPI::DBus, dbus-1).
+# srs_capi_stubs is defined in fidl/CMakeLists.txt via commonapi_generate_stubs().
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    pthread
+    ${SYSTEMD_LIBRARIES}
+    srs_capi_stubs)
 # use C++17
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 

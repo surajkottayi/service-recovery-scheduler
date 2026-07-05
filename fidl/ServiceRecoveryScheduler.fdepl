@@ -6,7 +6,7 @@
 import "platform:/plugin/org.genivi.commonapi.someip/deployment/CommonAPI-SOMEIP_deployment_spec.fdepl"
 import "ServiceRecoveryScheduler.fidl"
 
-define org.genivi.commonapi.someip.deployment for interface com.toyota.recovery.ServiceRecoveryScheduler {
+define org.genivi.commonapi.someip.deployment for interface com.bmw.recovery.ServiceRecoveryScheduler {
     SomeIpServiceID = 0x1234
 
     method registerService {
@@ -26,8 +26,8 @@ define org.genivi.commonapi.someip.deployment for interface com.toyota.recovery.
 }
 
 define org.genivi.commonapi.someip.deployment for provider RecoverySchedulerProvider {
-    instance com.toyota.recovery.ServiceRecoveryScheduler {
-        InstanceId = "com.toyota.recovery.ServiceRecoveryScheduler"
+    instance com.bmw.recovery.ServiceRecoveryScheduler {
+        InstanceId = "com.bmw.recovery.ServiceRecoveryScheduler"
 
         SomeIpInstanceID       = 0x0001
         SomeIpUnicastAddress   = "127.0.0.1"
