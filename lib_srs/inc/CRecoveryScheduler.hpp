@@ -2,19 +2,12 @@
 #define CRecoveryScheduler_HPP
 
 #include <unordered_map>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <filesystem>
 #include <Common.hpp>
 #include <algorithm>
-#include <pthread.h>
 #include <iostream>
-#include <csignal>
 #include <fstream>
 #include <memory>
-#include <atomic>
-#include <thread>
-#include <future>
 #include <mutex>
 namespace fs = std::filesystem;
 namespace lib_srs
@@ -38,13 +31,13 @@ namespace lib_srs
         }
     } SServiceRecoveryInfo;
 
-    class CRecoveryScheduler
+    class CRecoveryScheduler final
     {
     public:
         [[nodiscard]] static std::shared_ptr<CRecoveryScheduler> getInstance();
         ~CRecoveryScheduler() = default; // out-of-line: shared_ptr to incomplete type
 
-        bool onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval = -1);
+        bool onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval = -1, const pid_t &pid = -1);
         bool onUnregisterService(const std::string &serviceName);
         void init();
         void run();

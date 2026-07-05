@@ -13,6 +13,8 @@ exposed to other processes as a **CommonAPI D-Bus** service.
 -Common api shall be downloaded and compiled for this project
 
 
+
+
 ## Layout
 
 ```

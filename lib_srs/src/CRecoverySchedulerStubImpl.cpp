@@ -58,15 +58,14 @@ void CRecoverySchedulerStubImpl::registerService(const std::shared_ptr<CommonAPI
     {
         lActions.push_back(static_cast<RecoveryState>(static_cast<uint8_t>(lAction)));
     }
-
-    bool isOk = onRegisterService ? onRegisterService(serviceName, lActions, static_cast<int>(recoveryInterval)) : false;
+    const std::string lUniqueBusName = extractDbusUniqueName(client);
+    const pid_t lPid = queryUnixPidForBusName(lUniqueBusName);
+    bool isOk = onRegisterService ? onRegisterService(serviceName, lActions, static_cast<int>(recoveryInterval), lPid) : false;
 
     if (isOk)
     {
-        const std::string lUniqueBusName = extractDbusUniqueName(client);
         if (!lUniqueBusName.empty())
         {
-            const pid_t lPid = queryUnixPidForBusName(lUniqueBusName);
             std::lock_guard<std::mutex> lock(m_NameMutex);
             m_ServiceToBusName[serviceName] = PeerInfo{lUniqueBusName, lPid};
             LOG_INFO("SRSC", "DBUS", "watching bus name '" << lUniqueBusName << "' pid=" << lPid << " for service '" << serviceName << "'");

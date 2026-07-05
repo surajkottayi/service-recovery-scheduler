@@ -44,9 +44,8 @@ void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
         }
     }
 }
-bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval)
+bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval, const pid_t &pid)
 {
-    pid_t pid = -1; // TODO : populate from D-Bus caller (GetConnectionUnixProcessID)
     bool isNameValid = false;
     LOG_DEBUG("SRSC", "CORE", "registerService req name=" << serviceName << " pid=" << pid);
 
@@ -70,14 +69,21 @@ bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const
             lServiceInfo.recoveryActionCount = -1;
 
             if (!recoveryActions.empty())
+            {
                 lServiceInfo.push(recoveryActions);
+            }
             else
+            {
+                // default values
                 lServiceInfo.push({RecoveryState::RESTART, RecoveryState::RESTART,
                                    RecoveryState::STOP, RecoveryState::DISABLE});
+            }
 
+            std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
+            auto itFindMap = m_MapServiceInfo.find(serviceName);
+            if (itFindMap != m_MapServiceInfo.end())
             {
-                std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
-                m_MapServiceInfo[serviceName] = std::move(lServiceInfo);
+                itFindMap->second = std::move(lServiceInfo);
             }
             LOG_INFO("SRSC", "CORE", "service registered: " << serviceName << " pid=" << pid);
         }
@@ -107,18 +113,16 @@ bool CRecoveryScheduler::onUnregisterService(const std::string &serviceName)
     }
     else
     {
-        m_MapServiceInfo.erase(itFind);
         isSuccess = true;
+        m_MapServiceInfo.erase(itFind);
     }
     return isSuccess;
 }
 
 void CRecoveryScheduler::init()
 {
-    // Route IPC requests coming from the CommonAPI skeleton back into the
-    // scheduler through function pointers, so the stub stays agnostic of us.
-    m_StubImpl->setCallbacks([this](const std::string &lStrName, const std::vector<RecoveryState> &lvActions, int liInterval)
-                             { return this->onRegisterService(lStrName, lvActions, liInterval); },
+    m_StubImpl->setCallbacks([this](const std::string &lStrName, const std::vector<RecoveryState> &lvActions, int liInterval, const pid_t &pid)
+                             { return this->onRegisterService(lStrName, lvActions, liInterval, pid); },
                              [this](const std::string &lStrName)
                              { return this->onUnregisterService(lStrName); },
                              [this](const std::string &lStrName)

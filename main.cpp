@@ -8,10 +8,9 @@ using namespace lib_srs;
 
 int main()
 {
-    auto lRecoveryScheduler = CRecoveryScheduler::getInstance();
-    lRecoveryScheduler->init();
-
-    lRecoveryScheduler->run();
+    auto lpRecoveryScheduler = CRecoveryScheduler::getInstance();
+    lpRecoveryScheduler->init();
+    lpRecoveryScheduler->run();
 
     while (true)
     {

@@ -44,7 +44,7 @@ namespace lib_srs
         // Callbacks the owning scheduler installs to receive IPC requests and
         // D-Bus peer-loss notifications. Keeps this class agnostic of the
         // concrete scheduler type.
-        using CallbackRegister = std::function<bool(const std::string &serviceName, const std::vector<RecoveryState> &actions, int recoveryInterval)>;
+        using CallbackRegister = std::function<bool(const std::string &serviceName, const std::vector<RecoveryState> &actions, int recoveryInterval, const pid_t &pid)>;
         using CallbackUnregister = std::function<bool(const std::string &serviceName)>;
         using CallbackFailure = std::function<void(const std::string &serviceName)>;
 
