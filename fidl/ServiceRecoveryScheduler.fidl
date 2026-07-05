@@ -1,0 +1,73 @@
+// Franca IDL for the Service Recovery Scheduler.
+//
+// This interface is offered by the scheduler process (server) and consumed by
+// application processes (AppA, AppB, ...) that want the scheduler to monitor
+// them and take recovery actions on failure.
+//
+// Generate CommonAPI stubs with:
+//   commonapi-core-generator -sk -d gen ServiceRecoveryScheduler.fidl
+//   commonapi-someip-generator     -d gen ServiceRecoveryScheduler.fdepl
+
+package com.toyota.recovery
+
+interface ServiceRecoveryScheduler {
+    version { major 1 minor 0 }
+
+    // Mirrors lib_srs::RecoveryState in Common.hpp
+    enumeration RecoveryState {
+        RESTART = 0
+        STOP    = 1
+        DISABLE = 2
+        UNKNOWN = 255
+    }
+
+    // Ordered list of recovery actions to attempt when the service fails.
+    array RecoveryActionList of RecoveryState
+
+    // Result codes so remote callers get meaningful errors over IPC.
+    enumeration RegisterResult {
+        OK              = 0
+        INVALID_NAME    = 1
+        ALREADY_EXISTS  = 2
+        INTERNAL_ERROR  = 3
+    }
+
+    enumeration UnregisterResult {
+        OK           = 0
+        NOT_FOUND    = 1
+    }
+
+    // Called by AppX to enroll itself for monitoring & recovery.
+    //   serviceName      : must match an entry in g_MapServiceNames (e.g. "AppC")
+    //   recoveryActions  : sequence walked on each successive failure
+    //   recoveryInterval : cooldown in seconds between actions (-1 = default)
+    method registerService {
+        in {
+            String            serviceName
+            RecoveryActionList recoveryActions
+            Int32             recoveryInterval
+        }
+        out {
+            RegisterResult result
+        }
+    }
+
+    method unregisterService {
+        in {
+            String serviceName
+        }
+        out {
+            UnregisterResult result
+        }
+    }
+
+    // Broadcast fired by the scheduler when a monitored service has crashed
+    // and a recovery action was taken. Consumers can subscribe for UI updates
+    // or logging.
+    broadcast serviceStateChanged {
+        out {
+            String        serviceName
+            RecoveryState actionTaken
+        }
+    }
+}

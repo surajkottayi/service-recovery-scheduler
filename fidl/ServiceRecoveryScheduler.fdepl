@@ -1,0 +1,36 @@
+// SOME/IP deployment for ServiceRecoveryScheduler.
+// Assigns concrete IDs required by the SOME/IP wire protocol.
+//
+// Pick your own IDs — these must not collide with other services on the bus.
+
+import "platform:/plugin/org.genivi.commonapi.someip/deployment/CommonAPI-SOMEIP_deployment_spec.fdepl"
+import "ServiceRecoveryScheduler.fidl"
+
+define org.genivi.commonapi.someip.deployment for interface com.toyota.recovery.ServiceRecoveryScheduler {
+    SomeIpServiceID = 0x1234
+
+    method registerService {
+        SomeIpMethodID = 0x0001
+        SomeIpReliable = true
+    }
+
+    method unregisterService {
+        SomeIpMethodID = 0x0002
+        SomeIpReliable = true
+    }
+
+    broadcast serviceStateChanged {
+        SomeIpEventID           = 0x8001
+        SomeIpEventGroups       = { 0x0001 }
+    }
+}
+
+define org.genivi.commonapi.someip.deployment for provider RecoverySchedulerProvider {
+    instance com.toyota.recovery.ServiceRecoveryScheduler {
+        InstanceId = "com.toyota.recovery.ServiceRecoveryScheduler"
+
+        SomeIpInstanceID       = 0x0001
+        SomeIpUnicastAddress   = "127.0.0.1"
+        SomeIpUnicastPort      = 30509
+    }
+}

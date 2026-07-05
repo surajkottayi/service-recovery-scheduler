@@ -1,0 +1,35 @@
+{
+    "services":
+    [
+        {
+            "id": "APP_A",
+            "name": "AppA",
+            "actions": ["RESTART", "RESTART", "STOP", "DISABLE"]
+        },
+        {
+            "id": "APP_B",
+            "name": "AppB",
+            "actions": ["RESTART", "STOP"]
+        },
+         {
+            "id": "APP_C",
+            "name": "AppC",
+            "actions": ["RESTART", "RESTART", "STOP", "DISABLE"]
+        },
+        {
+            "id": "APP_D",
+            "name": "AppD",
+            "actions": ["RESTART", "STOP"]
+        },
+         {
+            "id": "APP_E",
+            "name": "AppE",
+            "actions": ["RESTART", "RESTART", "STOP", "DISABLE"]
+        },
+        {
+            "id": "APP_F",
+            "name": "AppF",
+            "actions": ["RESTART", "STOP"]
+        }
+    ]
+}
