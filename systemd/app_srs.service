@@ -1,0 +1,39 @@
+[Unit]
+Description=Service Recovery Scheduler (D-Bus)
+Documentation=man:app_srs(1)
+After=dbus.service
+Requires=dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/app_srs
+Restart=on-failure
+RestartSec=2s
+# Journal captures stderr — the daemon's logger writes there.
+StandardOutput=journal
+StandardError=journal
+
+# Hardening (systemd >= 240)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_KILL
+
+# The daemon signals other processes as part of its recovery actions.
+AmbientCapabilities=CAP_KILL
+
+Environment=COMMONAPI_CONFIG=/etc/app_srs/commonapi4dbus.ini
+Environment=COMMONAPI_DBUS_DEFAULT_CONFIG=/etc/app_srs/commonapi4dbus.ini
+
+[Install]
+WantedBy=multi-user.target

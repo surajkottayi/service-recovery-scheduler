@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-test-coverage:
+    name: Build, test, coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libdbus-1-dev libsystemd-dev \
+            default-jre-headless unzip git patch
+
+      - name: Configure (coverage on)
+        run: cmake -S . -B build -Wno-dev -DENABLE_COVERAGE=ON -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Generate coverage report
+        run: cmake --build build --target coverage
+
+      - name: Upload coverage HTML dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build/coverage
+          if-no-files-found: error
+
+  sanitizers:
+    name: AddressSanitizer + UBSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libdbus-1-dev libsystemd-dev \
+            default-jre-headless unzip git patch
+
+      - name: Configure (sanitizers on)
+        run: cmake -S . -B build -Wno-dev -DENABLE_SANITIZERS=ON -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test under sanitizers
+        env:
+          ASAN_OPTIONS: halt_on_error=1:strict_string_checks=1:detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure

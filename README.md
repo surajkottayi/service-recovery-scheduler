@@ -1,20 +1,21 @@
 # service-recovery-scheduler
-A small C++ library that manages recovery actions for a set of monitored services,
-exposed to other processes as a **CommonAPI D-Bus** service.
+A small C++ library and daemon that manages recovery actions for a set of
+monitored services, exposed to other processes as a **CommonAPI D-Bus**
+service.
 
+## Assumptions
+- C++17 (compiled with `-std=c++17`, no GNU extensions).
+- Linux host; systemd is expected as the process supervisor.
+- Client apps talk to the scheduler over D-Bus.
 
-#Assumptions
-- Modern app => modern c++ (> = c++11 is preferred), choosing c++14
-- Prefered Environment => Linux
-- Apps are connected to the scheduler over dbus
-
-
-#decisions
--Common api shall be downloaded and compiled for this project
--Apps shall reportState to SRS whenever state changes
-
-
-
+## Design decisions
+- CommonAPI (core + D-Bus) is fetched and built in-tree — no system install
+  required (see `cmake/CommonAPI.cmake`).
+- Clients report state to SRS whenever their state changes; SRS observes
+  liveness via D-Bus `NameOwnerChanged`.
+- Recovery actions are signal-based (`SIGTERM` for `RESTART`, `SIGKILL` for
+  `STOP`/`DISABLE`); the process supervisor decides whether/how to restart.
+  A systemd-unit-name path is planned for a future FIDL extension.
 
 ## Layout
 
@@ -23,36 +24,36 @@ CMakeLists.txt          Top-level build; includes cmake/CommonAPI.cmake.
 cmake/CommonAPI.cmake   Self-contained CommonAPI setup (see below).
 fidl/                   Franca IDL + D-Bus deployment + runtime .ini.
 lib_srs/                Core scheduler library + CommonAPI service skeleton.
+gtest/                  GoogleTest suite for lib_srs (built when BUILD_TESTING=ON).
 other_apps_dummy/       appA is a working D-Bus client; appB/C are placeholders.
+scripts/gen_report.py   Generates HTML coverage + test-result dashboard.
+systemd/                systemd unit file installed by cpack.
+build_srs.sh            Interactive build / UT / sanitize / package helper.
 main.cpp                Runs the scheduler and registers it on the session bus.
 ```
 
-## CommonAPI setup (self-contained)
+## Build script (`./build_srs.sh`)
 
-Everything lives in-tree — no system install of CommonAPI is needed.
-On the first `cmake` configure, `cmake/CommonAPI.cmake` will:
-
-1. **FetchContent** the runtimes from source into `build/_deps/`:
-   - `capicxx-core-runtime` (tag `CAPICXX_CORE_RUNTIME_TAG`, default `3.2.4`)
-   - `capicxx-dbus-runtime` (tag `CAPICXX_DBUS_RUNTIME_TAG`, default `3.2.3-r1`)
-2. **Download** the pre-built Eclipse RCP generators into
-   `build/_deps/commonapi-tools/`:
-   - `commonapi_core_generator` (`CAPICXX_CORE_TOOLS_VERSION`, default `3.2.15`)
-   - `commonapi_dbus_generator` (`CAPICXX_DBUS_TOOLS_VERSION`, default `3.2.15`)
-3. Expose a helper `commonapi_generate_stubs(TARGET ... FIDL ... FDEPL ...)` that
-   runs both generators against `fidl/RecoveryScheduler.fidl` and
-   `fidl/RecoveryScheduler-DBus.fdepl` and turns the generated C++ into
-   an OBJECT library named `srs_capi_stubs`.
-
-Override any version on the command line:
+One entry point for all common workflows. Run from the repo root.
 
 ```bash
-cmake -S . -B build \
-  -DCAPICXX_CORE_RUNTIME_TAG=3.2.4 \
-  -DCAPICXX_DBUS_RUNTIME_TAG=3.2.3-r1 \
-  -DCAPICXX_CORE_TOOLS_VERSION=3.2.15 \
-  -DCAPICXX_DBUS_TOOLS_VERSION=3.2.15
+./build_srs.sh          # interactive menu
+./build_srs.sh 1        # option 1: build only
+./build_srs.sh 2        # option 2: build + run unit tests + HTML coverage report
+./build_srs.sh 3        # option 3: build with ASan+UBSan and run tests
+./build_srs.sh 4        # option 4: release build + cpack (TGZ / DEB)
+./build_srs.sh -h       # help
 ```
+
+- **Option 1 — Build.** Configures with `-DENABLE_COVERAGE=OFF -DBUILD_TESTING=ON` and builds every target (`app_srs`, `appA/B/C`, `lib_srs_tests`).
+- **Option 2 — UT.** Configures with `-DENABLE_COVERAGE=ON`, builds, runs `ctest --output-on-failure`, then produces `build/coverage/index.html` — a dashboard with overall coverage %, per-file drill-downs (green/red annotated source), and a table of every gtest case. Open the file in any browser.
+- **Option 3 — Sanitize.** Configures with `-DENABLE_SANITIZERS=ON`, builds, and runs the full test suite under AddressSanitizer + UBSan (`halt_on_error=1`).
+- **Option 4 — Package.** Release configure, build, then `cpack -G TGZ;DEB`. Artefacts land in `build/*.tar.gz` (and `build/*.deb` when `dpkg` is available).
+
+Switching between options auto-cleans `build/` (compile flags change under FetchContent'd third-party trees, which is unsafe to reconfigure in-place). Repeat runs of the same option are incremental.
+
+Requires only the host prerequisites listed below plus `gcov` (bundled with gcc). No `lcov`/`gcovr` needed — the report generator is pure-stdlib Python.
+
 
 ### Host prerequisites
 
@@ -77,6 +78,9 @@ sudo apt install build-essential cmake pkg-config libdbus-1-dev \
 
 ## Build & run
 
+The fastest path is the wrapper script (see above): `./build_srs.sh 1`.
+The equivalent manual invocation:
+
 ```bash
 # Configure + build (fetches runtimes & generators on first run)
 cmake -S . -B build
@@ -93,33 +97,53 @@ export COMMONAPI_DBUS_DEFAULT_CONFIG=$PWD/fidl/commonapi4dbus.ini
 ./build/other_apps_dummy/appA
 ```
 
-## What talks to what
+## Tests & coverage
 
-- `lib_srs::CRecoveryScheduler` — the core in-process scheduler (unchanged
-  behaviour).
-- `lib_srs::RecoverySchedulerStubImpl` — thin D-Bus skeleton that inherits
-  from the generated `RecoverySchedulerStubDefault` and delegates
-  `registerService` / `unregisterService` to `CRecoveryScheduler`, and fires
-  the `serviceStateChanged` broadcast.
-- `other_apps_dummy/appA.cpp` — reference client. Builds a
-  `RecoverySchedulerProxy`, subscribes to `serviceStateChanged`, and
-  calls `registerService("AppA", ...)` remotely.
-
-## Regenerating stubs
-
-Stub generation is a normal CMake dependency of `srs_capi_stubs`: touching
-either `.fidl` or `.fdepl` file triggers regeneration on the next build. To
-force it manually:
+Run the tests + generate the HTML dashboard in one command:
 
 ```bash
-cmake --build build --target srs_capi_stubs_generate
+./build_srs.sh 2
+xdg-open build/coverage/index.html
 ```
 
-## SOME/IP note
+Or manually:
 
-The legacy `fidl/RecoveryScheduler.fdepl` (SOME/IP) is kept for
-reference but is not wired into the build. Switch to SOME/IP by adding the
-matching runtime (`capicxx-someip-runtime` + `vsomeip3`) in
-`cmake/CommonAPI.cmake` and pointing `commonapi_generate_stubs` at the
-SOME/IP `.fdepl`.
+```bash
+cmake -S . -B build -DENABLE_COVERAGE=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+cmake --build build --target coverage
+```
+
+## Deployment (systemd)
+
+`cpack` (`./build_srs.sh 4`) produces a `.deb` and/or `.tar.gz` that installs:
+
+| File                                             | Purpose                              |
+| ------------------------------------------------ | ------------------------------------ |
+| `/usr/bin/app_srs`                               | The daemon binary                     |
+| `/usr/lib/libservice_recovery_scheduler.so.*`    | Runtime library                       |
+| `/usr/include/service_recovery_scheduler/*.hpp`  | Public headers                        |
+| `/etc/app_srs/commonapi4dbus.ini`                | CommonAPI D-Bus runtime config        |
+| `/etc/service_recovery_scheduler/recoveryConfig.Json` | Per-service recovery config (stub) |
+| `/usr/lib/systemd/system/app_srs.service`        | Hardened systemd unit                 |
+| `/usr/share/doc/app_srs/LICENSE`                 | License text                          |
+
+Enable the daemon:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now app_srs.service
+journalctl -u app_srs -f
+```
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the vulnerability-reporting policy.
+Trust boundaries and hardened systemd sandboxing are documented there.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Third-party components pulled in at build
+time carry their own licenses; see [NOTICE](NOTICE).
 

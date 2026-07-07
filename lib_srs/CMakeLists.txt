@@ -62,3 +62,32 @@ if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g --coverage -fno-inline)
     target_link_options(${PROJECT_NAME} PRIVATE --coverage)
 endif()
+
+if(ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Address + Undefined-behavior sanitizers. Thread sanitizer is mutually
+    # exclusive with ASan, so keep it as a separate opt-in if needed later.
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        -O1 -g -fno-omit-frame-pointer
+        -fsanitize=address -fsanitize=undefined)
+    target_link_options(${PROJECT_NAME} PRIVATE
+        -fsanitize=address -fsanitize=undefined)
+endif()
+
+# -------------------- install() rules --------------------
+# Third-party FetchContent trees keep their install rules skipped; ours are
+# re-enabled at the end of cmake/CommonAPI.cmake, so no override is needed
+# here.
+
+include(GNUInstallDirs)
+install(TARGETS ${PROJECT_NAME}
+    EXPORT  ${PROJECT_NAME}Targets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY inc/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}
+    FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY config/
+    DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}
+    OPTIONAL)

@@ -4,6 +4,8 @@
 #   ./build_srs.sh           -> shows the menu
 #   ./build_srs.sh 1         -> build (release-ish, no coverage)
 #   ./build_srs.sh 2         -> build with coverage + run UT + generate HTML report
+#   ./build_srs.sh 3         -> build with AddressSanitizer + UBSan + run UT
+#   ./build_srs.sh 4         -> build a release TGZ/DEB package via cpack
 #   ./build_srs.sh -h        -> help
 #
 # All build artefacts land in ./build/  (repo-relative).
@@ -28,6 +30,8 @@ Usage: ./build_srs.sh [option]
 
   1   Build the project (no coverage instrumentation)
   2   Build with coverage, run unit tests, generate HTML report
+  3   Build with AddressSanitizer + UBSan and run unit tests
+  4   Build a release package (cpack: TGZ + DEB when dpkg available)
   h   Show this help
 
 If no option is given, an interactive menu is shown.
@@ -42,21 +46,23 @@ configure() {
     cmake -S . -B "$BUILD_DIR" -Wno-dev "${extra_flags[@]}"
 }
 
-# Nuke $BUILD_DIR when the requested coverage state differs from the cached
-# one. Reconfiguring FetchContent'd subprojects in-place after a CXXFLAGS
-# change (e.g. adding --coverage) is racy under `make -j`: some third-party
-# targets fail with `opening dependency file ... .o.d: No such file or
-# directory` because per-source subdirectories get invalidated but the mkdir
-# rule doesn't re-run before parallel compiles. A clean rebuild is fast enough
-# and completely deterministic.
+# Nuke $BUILD_DIR when a compile-flag option (coverage / sanitizers) differs
+# from the cached one. Reconfiguring FetchContent'd subprojects in-place after
+# a CXXFLAGS change is racy under `make -j`: some third-party targets fail
+# with `opening dependency file ... .o.d: No such file or directory` because
+# per-source subdirectories get invalidated but the mkdir rule doesn't re-run
+# before parallel compiles. A clean rebuild is fast enough and deterministic.
 require_clean_if_flag_flipped() {
     local want_cov="$1"    # ON or OFF
+    local want_san="$2"    # ON or OFF
     local cache="$BUILD_DIR/CMakeCache.txt"
     [[ -f "$cache" ]] || return 0
-    local have_cov
-    have_cov="$(grep -oE '^ENABLE_COVERAGE:BOOL=(ON|OFF)' "$cache" | cut -d= -f2 || true)"
-    if [[ -n "$have_cov" && "$have_cov" != "$want_cov" ]]; then
-        log "Coverage flag changed ($have_cov -> $want_cov); wiping $BUILD_DIR/ for a clean rebuild"
+    local have_cov have_san
+    have_cov="$(grep -oE '^ENABLE_COVERAGE:BOOL=(ON|OFF)'   "$cache" | cut -d= -f2 || true)"
+    have_san="$(grep -oE '^ENABLE_SANITIZERS:BOOL=(ON|OFF)' "$cache" | cut -d= -f2 || true)"
+    if { [[ -n "$have_cov" && "$have_cov" != "$want_cov" ]]; } \
+       || { [[ -n "$have_san" && "$have_san" != "$want_san" ]]; }; then
+        log "Build flavor changed (COVERAGE:$have_cov->$want_cov SAN:$have_san->$want_san); wiping $BUILD_DIR/"
         rm -rf "$BUILD_DIR"
     fi
 }
@@ -67,18 +73,18 @@ build_all() {
 }
 
 action_build() {
-    require_clean_if_flag_flipped OFF
+    require_clean_if_flag_flipped OFF OFF
     if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
-        configure -DENABLE_COVERAGE=OFF -DBUILD_TESTING=ON
+        configure -DENABLE_COVERAGE=OFF -DENABLE_SANITIZERS=OFF -DBUILD_TESTING=ON
     fi
     build_all
     printf '\n%sBuild complete.%s Artefacts under %s/\n' "$c_green$c_bold" "$c_reset" "$BUILD_DIR"
 }
 
 action_ut() {
-    require_clean_if_flag_flipped ON
+    require_clean_if_flag_flipped ON OFF
     if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
-        configure -DENABLE_COVERAGE=ON -DBUILD_TESTING=ON
+        configure -DENABLE_COVERAGE=ON -DENABLE_SANITIZERS=OFF -DBUILD_TESTING=ON
     fi
     build_all
 
@@ -93,17 +99,46 @@ action_ut() {
     printf 'Open with:  xdg-open %s   (or drag the file into a browser)\n' "$report"
 }
 
+action_sanitize() {
+    require_clean_if_flag_flipped OFF ON
+    if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+        configure -DENABLE_COVERAGE=OFF -DENABLE_SANITIZERS=ON -DBUILD_TESTING=ON
+    fi
+    build_all
+    log "Running unit tests under ASan+UBSan"
+    ASAN_OPTIONS="halt_on_error=1:strict_string_checks=1:detect_leaks=1" \
+    UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" \
+        ctest --test-dir "$BUILD_DIR" --output-on-failure
+    printf '\n%sSanitizer run complete.%s\n' "$c_green$c_bold" "$c_reset"
+}
+
+action_package() {
+    require_clean_if_flag_flipped OFF OFF
+    if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+        configure -DENABLE_COVERAGE=OFF -DENABLE_SANITIZERS=OFF -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+    fi
+    build_all
+    log "Running cpack (TGZ + DEB if dpkg available)"
+    local gens="TGZ"
+    command -v dpkg >/dev/null 2>&1 && gens="$gens;DEB"
+    ( cd "$BUILD_DIR" && cpack -G "$gens" )
+    printf '\n%sPackage(s) written to %s/:%s\n' "$c_green$c_bold" "$BUILD_DIR" "$c_reset"
+    ls -1 "$BUILD_DIR"/*.tar.gz "$BUILD_DIR"/*.deb 2>/dev/null || true
+}
+
 pick_menu() {
     # Route menu text to stderr so `$(pick_menu)` in main() only captures the choice.
     {
         printf '\n%sservice-recovery-scheduler build menu%s\n' "$c_bold" "$c_reset"
         printf '  1) Build                            (no coverage instrumentation)\n'
-        printf '  2) UT   (build + run tests + generate HTML coverage report)\n'
+        printf '  2) UT       (build + run tests + generate HTML coverage report)\n'
+        printf '  3) Sanitize (build with ASan+UBSan and run tests)\n'
+        printf '  4) Package  (release build + cpack TGZ/DEB)\n'
         printf '  h) Help\n'
         printf '  q) Quit\n\n'
     } >&2
     local choice
-    read -r -p "Select [1/2/h/q]: " choice
+    read -r -p "Select [1/2/3/4/h/q]: " choice
     echo "$choice"
 }
 
@@ -113,11 +148,13 @@ main() {
         opt="$(pick_menu)"
     fi
     case "$opt" in
-        1|build)         action_build ;;
-        2|ut|UT|test)    action_ut ;;
-        h|-h|--help)     usage ;;
-        q|Q|quit|exit)   log "aborted"; exit 0 ;;
-        *)               usage; die "unknown option: $opt" ;;
+        1|build)           action_build ;;
+        2|ut|UT|test)      action_ut ;;
+        3|san|sanitize)    action_sanitize ;;
+        4|pkg|package)     action_package ;;
+        h|-h|--help)       usage ;;
+        q|Q|quit|exit)     log "aborted"; exit 0 ;;
+        *)                 usage; die "unknown option: $opt" ;;
     esac
 }
 

@@ -1,0 +1,38 @@
+service-recovery-scheduler
+==========================
+
+The core sources under `lib_srs/`, `main.cpp`, `other_apps_dummy/`,
+`fidl/`, `gtest/`, `scripts/`, and the build glue are covered by the
+MIT license found in the accompanying `LICENSE` file.
+
+Third-party components pulled in at build time
+----------------------------------------------
+
+At configure time, `cmake/CommonAPI.cmake` downloads the following
+third-party projects into the build tree. They are neither modified by
+us in a way that changes their license, nor redistributed in source form
+from this repository, but any binary distribution of this project may
+ship compiled artefacts from them:
+
+* capicxx-core-runtime  (COVESA, MPL-2.0)
+    https://github.com/COVESA/capicxx-core-runtime
+* capicxx-dbus-runtime  (COVESA, MPL-2.0)
+    https://github.com/COVESA/capicxx-dbus-runtime
+* commonapi-core-generator, commonapi-dbus-generator  (COVESA, EPL-1.0)
+    https://github.com/COVESA/capicxx-core-tools
+    https://github.com/COVESA/capicxx-dbus-tools
+
+Additionally, a patched libdbus is built into the build tree:
+
+* libdbus (freedesktop.org, dual AFL-2.1 / GPL-2.0-or-later)
+    https://www.freedesktop.org/wiki/Software/dbus/
+  Patched with the BMW/COVESA patch set shipped inside
+  capicxx-dbus-runtime (see src/dbus-patches/*.patch in that upstream).
+
+Unit tests link against:
+
+* GoogleTest  (Google, BSD-3-Clause)
+    https://github.com/google/googletest
+
+If you ship binaries built from this repository, verify that your
+distribution complies with the licenses above.

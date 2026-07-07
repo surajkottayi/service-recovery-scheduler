@@ -49,10 +49,12 @@ if(NOT JAVA_EXECUTABLE)
 endif()
 
 # ---- Runtimes ---------------------------------------------------------------
-# We consume the runtimes in-tree only; skip their `install()` rules so that
-# capicxx-dbus-runtime's install(EXPORT ...) doesn't drag the CommonAPI target
-# (owned by capicxx-core-runtime) into its export set — CMake rejects that.
-set(CMAKE_SKIP_INSTALL_RULES TRUE)
+# We consume the runtimes in-tree. Their install() rules DO run so that
+# packaged output (`cpack -G DEB`) bundles libCommonAPI.so / libCommonAPI-DBus.so
+# alongside app_srs. The offending `install(EXPORT CommonAPI-DBusTargets ...)`
+# in capicxx-dbus-runtime — which would try to bundle a target owned by
+# capicxx-core-runtime into its own export set — is stripped by PATCH_COMMAND
+# further down.
 
 # capicxx-core-runtime is straightforward: FetchContent + add_subdirectory,
 # which additionally generates CommonAPIConfig.cmake into its build tree so
