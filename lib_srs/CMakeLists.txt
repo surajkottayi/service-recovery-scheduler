@@ -57,3 +57,8 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -Wl,-z,relro         # make GOT read-only after relocation
     -Wl,-z,now           # resolve all symbols at load time (BIND_NOW)
     -Wl,-z,noexecstack)  # non-executable stack
+
+if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g --coverage -fno-inline)
+    target_link_options(${PROJECT_NAME} PRIVATE --coverage)
+endif()

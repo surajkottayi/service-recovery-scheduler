@@ -11,6 +11,7 @@ exposed to other processes as a **CommonAPI D-Bus** service.
 
 #decisions
 -Common api shall be downloaded and compiled for this project
+-Apps shall reportState to SRS whenever state changes
 
 
 
@@ -22,7 +23,7 @@ CMakeLists.txt          Top-level build; includes cmake/CommonAPI.cmake.
 cmake/CommonAPI.cmake   Self-contained CommonAPI setup (see below).
 fidl/                   Franca IDL + D-Bus deployment + runtime .ini.
 lib_srs/                Core scheduler library + CommonAPI service skeleton.
-other_apps/             appA is a working D-Bus client; appB/C are placeholders.
+other_apps_dummy/       appA is a working D-Bus client; appB/C are placeholders.
 main.cpp                Runs the scheduler and registers it on the session bus.
 ```
 
@@ -89,7 +90,7 @@ export COMMONAPI_DBUS_DEFAULT_CONFIG=$PWD/fidl/commonapi4dbus.ini
 ./build/app_srs
 
 # Terminal 2: run a client
-./build/other_apps/appA
+./build/other_apps_dummy/appA
 ```
 
 ## What talks to what
@@ -100,7 +101,7 @@ export COMMONAPI_DBUS_DEFAULT_CONFIG=$PWD/fidl/commonapi4dbus.ini
   from the generated `RecoverySchedulerStubDefault` and delegates
   `registerService` / `unregisterService` to `CRecoveryScheduler`, and fires
   the `serviceStateChanged` broadcast.
-- `other_apps/appA.cpp` — reference client. Builds a
+- `other_apps_dummy/appA.cpp` — reference client. Builds a
   `RecoverySchedulerProxy`, subscribes to `serviceStateChanged`, and
   calls `registerService("AppA", ...)` remotely.
 

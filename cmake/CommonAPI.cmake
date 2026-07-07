@@ -243,6 +243,14 @@ endif()
 # picks it up in preference to the system libdbus-1.
 set(ENV{PKG_CONFIG_PATH} "${_dbus_prefix}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 
+# Tell CMake the patched-dbus lib dir is a known implicit link directory. Every
+# consumer of libdbus-1 otherwise triggers a "Cannot generate a safe runtime
+# search path" warning because our RPATH entry ${_dbus_prefix}/lib appears to
+# "hide" the system /usr/lib/.../libdbus-1.so.3 -- which is intentional here.
+if(NOT "${_dbus_prefix}/lib" IN_LIST CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES)
+    list(APPEND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${_dbus_prefix}/lib")
+endif()
+
 # Now that dbus-1 (patched) is discoverable via pkg-config, wire the fetched
 # capicxx-dbus-runtime into the build.
 add_subdirectory(${capicxx_dbus_runtime_SOURCE_DIR} ${capicxx_dbus_runtime_BINARY_DIR})
