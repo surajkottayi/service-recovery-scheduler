@@ -47,19 +47,26 @@ namespace lib_srs
         using CallbackRegister = std::function<bool(const std::string &serviceName, const std::vector<RecoveryState> &actions, int recoveryInterval, const pid_t &pid)>;
         using CallbackUnregister = std::function<bool(const std::string &serviceName)>;
         using CallbackFailure = std::function<void(const std::string &serviceName)>;
+        using CallbackReport = std::function<bool(const std::string &serviceName, RecoveryState currentAction, RecoveryState lastAction)>;
 
         std::string extractDbusUniqueName(const std::shared_ptr<CommonAPI::ClientId> &client);
 
         CRecoverySchedulerStubImpl() = default;
         ~CRecoverySchedulerStubImpl() override;
 
-        void setCallbacks(CallbackRegister onRegister, CallbackUnregister onUnregister, CallbackFailure onFailure);
+        void setCallbacks(CallbackRegister onRegister, CallbackUnregister onUnregister, CallbackFailure onFailure, CallbackReport onReport);
 
         void registerService(const std::shared_ptr<CommonAPI::ClientId> client,
                              std::string serviceName, std::vector<GeneratedIface::RecoveryState> recoveryActions,
                              int32_t recoveryInterval, registerServiceReply_t reply) override;
 
         void unregisterService(const std::shared_ptr<CommonAPI::ClientId> client, std::string serviceName, unregisterServiceReply_t reply) override;
+
+        void reportServiceState(const std::shared_ptr<CommonAPI::ClientId> client,
+                                std::string serviceName,
+                                GeneratedIface::RecoveryState currentAction,
+                                GeneratedIface::RecoveryState lastAction,
+                                reportServiceStateReply_t reply) override;
 
         void notifyStateChanged(const std::string &serviceName, RecoveryState actionTaken);
 
@@ -88,6 +95,7 @@ namespace lib_srs
         CallbackRegister onRegisterService;
         CallbackUnregister onUnregisterService;
         CallbackFailure onServiceFailure;
+        CallbackReport onReportServiceState;
     };
 } // namespace lib_srs
 

@@ -43,6 +43,18 @@ int main()
 
         LOG_INFO("APPB", "MAIN", "register status=" << static_cast<int>(status) << " result=" << static_cast<int>(result));
 
+        auto pushState = [&](srs::RecoveryScheduler::RecoveryState current,
+                             srs::RecoveryScheduler::RecoveryState last)
+        {
+            CommonAPI::CallStatus lPushStatus{};
+            srs::RecoveryScheduler::QueryResult lPushResult{};
+            proxy->reportServiceState(lAppName, current, last, lPushStatus, lPushResult);
+            LOG_INFO("APPB", "PUSH", "reportServiceState current=" << static_cast<int>(current) << " last=" << static_cast<int>(last) << " status=" << static_cast<int>(lPushStatus) << " result=" << static_cast<int>(lPushResult));
+        };
+
+        pushState(srs::RecoveryScheduler::RecoveryState::STOP,
+                  srs::RecoveryScheduler::RecoveryState::UNKNOWN);
+
         while (true)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));

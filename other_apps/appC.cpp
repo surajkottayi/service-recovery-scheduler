@@ -44,6 +44,18 @@ int main()
 
         LOG_INFO("APPC", "MAIN", "register status=" << static_cast<int>(lStatus) << " result=" << static_cast<int>(result));
 
+        auto pushState = [&](srs::RecoveryScheduler::RecoveryState current,
+                             srs::RecoveryScheduler::RecoveryState last)
+        {
+            CommonAPI::CallStatus lPushStatus{};
+            srs::RecoveryScheduler::QueryResult lPushResult{};
+            proxy->reportServiceState(lAppName, current, last, lPushStatus, lPushResult);
+            LOG_INFO("APPC", "PUSH", "reportServiceState current=" << static_cast<int>(current) << " last=" << static_cast<int>(last) << " status=" << static_cast<int>(lPushStatus) << " result=" << static_cast<int>(lPushResult));
+        };
+
+        pushState(srs::RecoveryScheduler::RecoveryState::DISABLE,
+                  srs::RecoveryScheduler::RecoveryState::UNKNOWN);
+
         while (true)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));

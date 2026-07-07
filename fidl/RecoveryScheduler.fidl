@@ -18,6 +18,7 @@ interface RecoveryScheduler {
         RESTART = 0
         STOP    = 1
         DISABLE = 2
+        CRASHED = 3
         UNKNOWN = 255
     }
 
@@ -35,6 +36,11 @@ interface RecoveryScheduler {
     enumeration UnregisterResult {
         OK           = 0
         NOT_FOUND    = 1
+    }
+
+    enumeration QueryResult {
+        OK        = 0
+        NOT_FOUND = 1
     }
 
     // Called by AppX to enroll itself for monitoring & recovery.
@@ -58,6 +64,22 @@ interface RecoveryScheduler {
         }
         out {
             UnregisterResult result
+        }
+    }
+
+    // App-push: called by AppX whenever its live state changes.
+    //   currentAction : what the app is currently doing
+    //   lastAction    : the previous action / state, for audit
+    // The scheduler caches this; anything inside app_srs can then read the
+    // snapshot via CRecoveryScheduler::getServiceState() (plain C++, no IPC).
+    method reportServiceState {
+        in {
+            String        serviceName
+            RecoveryState currentAction
+            RecoveryState lastAction
+        }
+        out {
+            QueryResult result
         }
     }
 

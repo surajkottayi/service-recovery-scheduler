@@ -38,11 +38,12 @@ CRecoverySchedulerStubImpl::~CRecoverySchedulerStubImpl()
     }
 }
 
-void CRecoverySchedulerStubImpl::setCallbacks(CallbackRegister onRegister, CallbackUnregister onUnregister, CallbackFailure onFailure)
+void CRecoverySchedulerStubImpl::setCallbacks(CallbackRegister onRegister, CallbackUnregister onUnregister, CallbackFailure onFailure, CallbackReport onReport)
 {
     onRegisterService = std::move(onRegister);
     onUnregisterService = std::move(onUnregister);
     onServiceFailure = std::move(onFailure);
+    onReportServiceState = std::move(onReport);
 }
 
 void CRecoverySchedulerStubImpl::registerService(const std::shared_ptr<CommonAPI::ClientId> client,
@@ -84,6 +85,18 @@ void CRecoverySchedulerStubImpl::unregisterService(const std::shared_ptr<CommonA
         m_ServiceToBusName.erase(serviceName);
     }
     reply(isOk ? GeneratedIface::UnregisterResult::OK : GeneratedIface::UnregisterResult::NOT_FOUND);
+}
+
+void CRecoverySchedulerStubImpl::reportServiceState(const std::shared_ptr<CommonAPI::ClientId> /*client*/,
+                                                    std::string serviceName,
+                                                    GeneratedIface::RecoveryState currentAction,
+                                                    GeneratedIface::RecoveryState lastAction,
+                                                    reportServiceStateReply_t reply)
+{
+    const auto lCurrent = static_cast<RecoveryState>(static_cast<uint8_t>(currentAction));
+    const auto lLast = static_cast<RecoveryState>(static_cast<uint8_t>(lastAction));
+    const bool isOk = onReportServiceState ? onReportServiceState(serviceName, lCurrent, lLast) : false;
+    reply(isOk ? GeneratedIface::QueryResult::OK : GeneratedIface::QueryResult::NOT_FOUND);
 }
 
 void CRecoverySchedulerStubImpl::notifyStateChanged(const std::string &serviceName, RecoveryState actionTaken)

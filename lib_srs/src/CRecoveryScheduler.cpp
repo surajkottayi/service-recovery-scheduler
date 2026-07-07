@@ -23,10 +23,17 @@ void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
     if (itFind != m_MapServiceInfo.end())
     {
         SServiceRecoveryInfo &info = itFind->second;
+        // Peer connection is gone. Record CRASHED as the last observed event
+        // so a later query (even after the app restarts) can see it.
+        info.isOnline = false;
+        ++info.crashCount;
         ++info.recoveryActionCount;
         info.recoveryActionCount = (info.recoveryActionCount == static_cast<int8_t>(info.recoveryActions.size())) ? 0 : info.recoveryActionCount; // wrap around to the first action
         const RecoveryState lNextState = info.recoveryActions[static_cast<size_t>(info.recoveryActionCount)];
         LOG_DEBUG("SRSC", "CORE", "attempt=" << static_cast<int>(info.recoveryActionCount) << " nextAction=" << toString(lNextState));
+
+        info.lastAction = RecoveryState::CRASHED;
+        info.currentRecoveryState = lNextState;
 
         switch (lNextState)
         {
@@ -67,6 +74,7 @@ bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const
             // lServiceInfo.pid = findPidByName(serviceName);
             lServiceInfo.recoveryInterval = recoveryInterval;
             lServiceInfo.recoveryActionCount = -1;
+            lServiceInfo.isOnline = true;
 
             if (!recoveryActions.empty())
             {
@@ -80,11 +88,7 @@ bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const
             }
 
             std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
-            auto itFindMap = m_MapServiceInfo.find(serviceName);
-            if (itFindMap != m_MapServiceInfo.end())
-            {
-                itFindMap->second = std::move(lServiceInfo);
-            }
+            m_MapServiceInfo.emplace(serviceName, std::move(lServiceInfo));
             LOG_INFO("SRSC", "CORE", "service registered: " << serviceName << " pid=" << pid);
         }
         else
@@ -96,7 +100,10 @@ bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const
     else
     {
         isNameValid = true;
-        LOG_WARN("SRSC", "CORE", "already registered service: " << serviceName);
+        // Re-registration after a crash: peer is back online.
+        std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
+        itFind->second.isOnline = true;
+        LOG_WARN("SRSC", "CORE", "already registered service (now back online): " << serviceName);
     }
     return isNameValid;
 }
@@ -119,6 +126,50 @@ bool CRecoveryScheduler::onUnregisterService(const std::string &serviceName)
     return isSuccess;
 }
 
+bool CRecoveryScheduler::onReportServiceState(const std::string &serviceName, RecoveryState currentAction, RecoveryState lastAction)
+{
+    std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
+    auto itFind = m_MapServiceInfo.find(serviceName);
+    if (itFind == m_MapServiceInfo.end())
+    {
+        LOG_WARN("SRSC", "CORE", "reportServiceState for unknown service: " << serviceName);
+        return false;
+    }
+    itFind->second.currentRecoveryState = currentAction;
+    // UNKNOWN from the app means "I don't have a meaningful lastAction" — keep
+    // whatever the scheduler already tracks (e.g. CRASHED set on peer loss).
+    if (lastAction != RecoveryState::UNKNOWN)
+    {
+        itFind->second.lastAction = lastAction;
+    }
+    LOG_INFO("SRSC", "CORE", "state pushed name=" << serviceName << " current=" << toString(currentAction) << " last=" << toString(lastAction));
+    return true;
+}
+
+SServiceSnapshot CRecoveryScheduler::getServiceState(const std::string &serviceName)
+{
+    SServiceSnapshot lSnapshot;
+    std::lock_guard<std::mutex> lock(m_MutxServiceInfo);
+    auto itFind = m_MapServiceInfo.find(serviceName);
+    if (itFind != m_MapServiceInfo.end())
+    {
+        const SServiceRecoveryInfo &info = itFind->second;
+        lSnapshot.found = true;
+        lSnapshot.isOnline = info.isOnline;
+        lSnapshot.currentAction = info.currentRecoveryState;
+        lSnapshot.lastAction = info.lastAction;
+        lSnapshot.attemptCount = static_cast<int>(info.crashCount);
+        // Peek at the action the scheduler would drive on the *next* failure.
+        if (!info.recoveryActions.empty())
+        {
+            const size_t lSize = info.recoveryActions.size();
+            const int8_t lNextIdx = (info.recoveryActionCount + 1 >= static_cast<int8_t>(lSize)) ? 0 : static_cast<int8_t>(info.recoveryActionCount + 1);
+            lSnapshot.nextAction = info.recoveryActions[static_cast<size_t>(lNextIdx)];
+        }
+    }
+    return lSnapshot;
+}
+
 void CRecoveryScheduler::init()
 {
     m_StubImpl->setCallbacks([this](const std::string &lStrName, const std::vector<RecoveryState> &lvActions, int liInterval, const pid_t &pid)
@@ -126,7 +177,9 @@ void CRecoveryScheduler::init()
                              [this](const std::string &lStrName)
                              { return this->onUnregisterService(lStrName); },
                              [this](const std::string &lStrName)
-                             { this->onServiceFailure(lStrName); });
+                             { this->onServiceFailure(lStrName); },
+                             [this](const std::string &lStrName, RecoveryState lCurrent, RecoveryState lLast)
+                             { return this->onReportServiceState(lStrName, lCurrent, lLast); });
 }
 
 void CRecoveryScheduler::run()

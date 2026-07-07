@@ -20,6 +20,7 @@ namespace lib_srs
         RESTART = 0,
         STOP = 1,
         DISABLE = 2,
+        CRASHED = 3,
         UNKNOWN = std::numeric_limits<uint8_t>::max()
     };
 
@@ -36,6 +37,9 @@ namespace lib_srs
             break;
         case RecoveryState::DISABLE:
             lStrRet = "DISABLE";
+            break;
+        case RecoveryState::CRASHED:
+            lStrRet = "CRASHED";
             break;
         case RecoveryState::UNKNOWN:
             lStrRet = "UNKNOWN";

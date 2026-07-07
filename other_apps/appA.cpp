@@ -31,8 +31,7 @@ int main()
         }
 
         proxy->getServiceStateChangedEvent().subscribe([lAppName](const std::string &name, srs::RecoveryScheduler::RecoveryState st)
-                                                       { LOG_INFO("APPA", "EVT ", "state changed name=" << name
-                                                                                                        << " action=" << static_cast<int>(st)); });
+                                                       { LOG_INFO("APPA", "EVT ", "state changed name=" << name << " action=" << static_cast<int>(st)); });
 
         CommonAPI::CallStatus status{};
         srs::RecoveryScheduler::RegisterResult result{};
@@ -46,8 +45,23 @@ int main()
                                status,
                                result);
 
-        LOG_INFO("APPA", "MAIN", "register status=" << static_cast<int>(status)
-                                                    << " result=" << static_cast<int>(result));
+        LOG_INFO("APPA", "MAIN", "register status=" << static_cast<int>(status) << " result=" << static_cast<int>(result));
+
+        // App-push: tell the scheduler what our live state is. RESTART here is
+        // a placeholder for "just came up / running normally"; substitute your
+        // own health state as appropriate.
+        auto pushState = [&](srs::RecoveryScheduler::RecoveryState current,
+                             srs::RecoveryScheduler::RecoveryState last)
+        {
+            CommonAPI::CallStatus lPushStatus{};
+            srs::RecoveryScheduler::QueryResult lPushResult{};
+            proxy->reportServiceState(lAppName, current, last, lPushStatus, lPushResult);
+            LOG_INFO("APPA", "PUSH", "reportServiceState current=" << static_cast<int>(current) << " last=" << static_cast<int>(last) << " status=" << static_cast<int>(lPushStatus) << " result=" << static_cast<int>(lPushResult));
+        };
+
+        auto lastState = srs::RecoveryScheduler::RecoveryState::UNKNOWN;
+        auto currentState = srs::RecoveryScheduler::RecoveryState::RESTART;
+        pushState(currentState, lastState);
 
         while (true)
         {

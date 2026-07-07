@@ -21,7 +21,10 @@ namespace lib_srs
         std::vector<RecoveryState> recoveryActions;
         int recoveryInterval; // in seconds
         int8_t recoveryActionCount;
-        RecoveryState currentRecoveryState;
+        uint32_t crashCount{0}; // total crashes observed since first registration
+        bool isOnline{false};
+        RecoveryState currentRecoveryState{RecoveryState::UNKNOWN};
+        RecoveryState lastAction{RecoveryState::UNKNOWN};
         void push(const std::vector<RecoveryState> &lvActions)
         {
             for (const auto &action : lvActions)
@@ -31,6 +34,15 @@ namespace lib_srs
         }
     } SServiceRecoveryInfo;
 
+    typedef struct _SServiceSnapshot
+    {
+        bool found{false};
+        bool isOnline{false};
+        RecoveryState lastAction{RecoveryState::UNKNOWN};
+        RecoveryState currentAction{RecoveryState::UNKNOWN};
+        RecoveryState nextAction{RecoveryState::UNKNOWN};
+        int attemptCount{0};
+    } SServiceSnapshot;
     class CRecoveryScheduler final
     {
     public:
@@ -39,6 +51,8 @@ namespace lib_srs
 
         bool onRegisterService(const std::string &serviceName, const std::vector<RecoveryState> &recoveryActions, int recoveryInterval = -1, const pid_t &pid = -1);
         bool onUnregisterService(const std::string &serviceName);
+        bool onReportServiceState(const std::string &serviceName, RecoveryState currentAction, RecoveryState lastAction);
+        SServiceSnapshot getServiceState(const std::string &serviceName);
         void init();
         void run();
         void onServiceFailure(const std::string &serviceName);
