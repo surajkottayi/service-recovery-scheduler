@@ -68,9 +68,9 @@ if(ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # exclusive with ASan, so keep it as a separate opt-in if needed later.
     target_compile_options(${PROJECT_NAME} PRIVATE
         -O1 -g -fno-omit-frame-pointer
-        -fsanitize=address -fsanitize=undefined)
+        -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr)
     target_link_options(${PROJECT_NAME} PRIVATE
-        -fsanitize=address -fsanitize=undefined)
+        -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr)
 endif()
 
 # -------------------- install() rules --------------------

@@ -91,7 +91,9 @@ action_ut() {
     build_all
 
     log "Running unit tests via ctest"
-    ctest --test-dir "$BUILD_DIR" --output-on-failure
+    # `ctest --test-dir` was added in CTest 3.20; the project supports CMake
+    # 3.16 so run ctest with the build dir as cwd instead.
+    ( cd "$BUILD_DIR" && ctest --output-on-failure )
 
     log "Generating HTML coverage + test-result dashboard"
     cmake --build "$BUILD_DIR" --target coverage
