@@ -28,11 +28,11 @@ void CRecoveryScheduler::onServiceFailure(const std::string &serviceName)
         info.isOnline = false;
         ++info.crashCount;
         ++info.recoveryActionCount;
-        info.recoveryActionCount = (info.recoveryActionCount == static_cast<int8_t>(info.recoveryActions.size())) ? 0 : info.recoveryActionCount; // wrap around to the first action
+        info.recoveryActionCount       = (info.recoveryActionCount == static_cast<int8_t>(info.recoveryActions.size())) ? 0 : info.recoveryActionCount; // wrap around to the first action
         const RecoveryState lNextState = info.recoveryActions[static_cast<size_t>(info.recoveryActionCount)];
         LOG_DEBUG("SRSC", "CORE", "attempt=" << static_cast<int>(info.recoveryActionCount) << " nextAction=" << toString(lNextState));
 
-        info.lastAction = RecoveryState::CRASHED;
+        info.lastAction           = RecoveryState::CRASHED;
         info.currentRecoveryState = lNextState;
 
         switch (lNextState)
@@ -72,9 +72,9 @@ bool CRecoveryScheduler::onRegisterService(const std::string &serviceName, const
             SServiceRecoveryInfo lServiceInfo;
             lServiceInfo.serviceName = serviceName;
             // lServiceInfo.pid = findPidByName(serviceName);
-            lServiceInfo.recoveryInterval = recoveryInterval;
+            lServiceInfo.recoveryInterval    = recoveryInterval;
             lServiceInfo.recoveryActionCount = -1;
-            lServiceInfo.isOnline = true;
+            lServiceInfo.isOnline            = true;
 
             if (!recoveryActions.empty())
             {
@@ -154,17 +154,17 @@ SServiceSnapshot CRecoveryScheduler::getServiceState(const std::string &serviceN
     if (itFind != m_MapServiceInfo.end())
     {
         const SServiceRecoveryInfo &info = itFind->second;
-        lSnapshot.found = true;
-        lSnapshot.isOnline = info.isOnline;
-        lSnapshot.currentAction = info.currentRecoveryState;
-        lSnapshot.lastAction = info.lastAction;
-        lSnapshot.attemptCount = static_cast<int>(info.crashCount);
+        lSnapshot.found                  = true;
+        lSnapshot.isOnline               = info.isOnline;
+        lSnapshot.currentAction          = info.currentRecoveryState;
+        lSnapshot.lastAction             = info.lastAction;
+        lSnapshot.attemptCount           = static_cast<int>(info.crashCount);
         // Peek at the action the scheduler would drive on the *next* failure.
         if (!info.recoveryActions.empty())
         {
-            const size_t lSize = info.recoveryActions.size();
+            const size_t lSize    = info.recoveryActions.size();
             const int8_t lNextIdx = (info.recoveryActionCount + 1 >= static_cast<int8_t>(lSize)) ? 0 : static_cast<int8_t>(info.recoveryActionCount + 1);
-            lSnapshot.nextAction = info.recoveryActions[static_cast<size_t>(lNextIdx)];
+            lSnapshot.nextAction  = info.recoveryActions[static_cast<size_t>(lNextIdx)];
         }
     }
     return lSnapshot;
@@ -182,7 +182,7 @@ void CRecoveryScheduler::init()
                              { return this->onReportServiceState(lStrName, lCurrent, lLast); });
 }
 
-void CRecoveryScheduler::run()
+bool CRecoveryScheduler::run()
 {
-    CRecoverySchedulerStubImpl::run(m_StubImpl);
+    return CRecoverySchedulerStubImpl::run(m_StubImpl);
 }

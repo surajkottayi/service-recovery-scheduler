@@ -132,8 +132,14 @@ namespace lib_srs
 
         /// One-time bootstrap: brings up the CommonAPI stub and wires callbacks.
         void init();
-        /// Blocking main loop; drives housekeeping until the process exits.
-        void run();
+        /**
+         * @brief Register the CommonAPI stub with the runtime.
+         * @return `true` if registration succeeded; `false` if the runtime
+         *         was unavailable or the DBus binding refused to publish the
+         *         service name (see server log for the specific reason).
+         *         Callers should treat `false` as fatal.
+         */
+        bool run();
 
         /**
          * @brief Called by the stub when a peer's D-Bus connection disappears.

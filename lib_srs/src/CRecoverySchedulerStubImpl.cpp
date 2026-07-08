@@ -2,13 +2,14 @@
 #include "Logger.hpp"
 #include <CommonAPI/CommonAPI.hpp>
 #define COMMONAPI_INTERNAL_COMPILATION
-#include <CommonAPI/DBus/DBusClientId.hpp>
-#include <CommonAPI/DBus/DBusStubAdapter.hpp>
-#include <CommonAPI/DBus/DBusInputStream.hpp>
-#include <CommonAPI/DBus/DBusOutputStream.hpp>
-#include <CommonAPI/DBus/DBusMessage.hpp>
 #include <CommonAPI/DBus/DBusAddress.hpp>
+#include <CommonAPI/DBus/DBusClientId.hpp>
 #include <CommonAPI/DBus/DBusError.hpp>
+#include <CommonAPI/DBus/DBusFactory.hpp>
+#include <CommonAPI/DBus/DBusInputStream.hpp>
+#include <CommonAPI/DBus/DBusMessage.hpp>
+#include <CommonAPI/DBus/DBusOutputStream.hpp>
+#include <CommonAPI/DBus/DBusStubAdapter.hpp>
 #undef COMMONAPI_INTERNAL_COMPILATION
 
 #include <iostream>
@@ -18,12 +19,12 @@ using namespace lib_srs;
 
 std::string CRecoverySchedulerStubImpl::extractDbusUniqueName(const std::shared_ptr<CommonAPI::ClientId> &client)
 {
-    auto dbusClient = std::dynamic_pointer_cast<CommonAPI::DBus::DBusClientId>(client);
+    auto dbusClient  = std::dynamic_pointer_cast<CommonAPI::DBus::DBusClientId>(client);
     char *lDBusidCpy = nullptr;
     if (dbusClient)
     {
         const char *lDBusid = dbusClient->getDBusId();
-        lDBusidCpy = lDBusid ? strdup(lDBusid) : nullptr;
+        lDBusidCpy          = lDBusid ? strdup(lDBusid) : nullptr;
     }
     std::string result = lDBusidCpy ? std::string(lDBusidCpy) : std::string();
     free(lDBusidCpy);
@@ -40,9 +41,9 @@ CRecoverySchedulerStubImpl::~CRecoverySchedulerStubImpl()
 
 void CRecoverySchedulerStubImpl::setCallbacks(CallbackRegister onRegister, CallbackUnregister onUnregister, CallbackFailure onFailure, CallbackReport onReport)
 {
-    onRegisterService = std::move(onRegister);
-    onUnregisterService = std::move(onUnregister);
-    onServiceFailure = std::move(onFailure);
+    onRegisterService    = std::move(onRegister);
+    onUnregisterService  = std::move(onUnregister);
+    onServiceFailure     = std::move(onFailure);
     onReportServiceState = std::move(onReport);
 }
 
@@ -60,8 +61,8 @@ void CRecoverySchedulerStubImpl::registerService(const std::shared_ptr<CommonAPI
         lActions.push_back(static_cast<RecoveryState>(static_cast<uint8_t>(lAction)));
     }
     const std::string lUniqueBusName = extractDbusUniqueName(client);
-    const pid_t lPid = queryUnixPidForBusName(lUniqueBusName);
-    bool isOk = onRegisterService ? onRegisterService(serviceName, lActions, static_cast<int>(recoveryInterval), lPid) : false;
+    const pid_t lPid                 = queryUnixPidForBusName(lUniqueBusName);
+    bool isOk                        = onRegisterService ? onRegisterService(serviceName, lActions, static_cast<int>(recoveryInterval), lPid) : false;
 
     if (isOk)
     {
@@ -94,8 +95,8 @@ void CRecoverySchedulerStubImpl::reportServiceState(const std::shared_ptr<Common
                                                     reportServiceStateReply_t reply)
 {
     const auto lCurrent = static_cast<RecoveryState>(static_cast<uint8_t>(currentAction));
-    const auto lLast = static_cast<RecoveryState>(static_cast<uint8_t>(lastAction));
-    const bool isOk = onReportServiceState ? onReportServiceState(serviceName, lCurrent, lLast) : false;
+    const auto lLast    = static_cast<RecoveryState>(static_cast<uint8_t>(lastAction));
+    const bool isOk     = onReportServiceState ? onReportServiceState(serviceName, lCurrent, lLast) : false;
     reply(isOk ? GeneratedIface::QueryResult::OK : GeneratedIface::QueryResult::NOT_FOUND);
 }
 
@@ -130,7 +131,7 @@ void CRecoverySchedulerStubImpl::handleNameOwnerChanged(const std::string &name,
                 if (itFind->second.uniqueBusName == name)
                 {
                     lStrAffectedService = itFind->first;
-                    lPid = itFind->second.pid;
+                    lPid                = itFind->second.pid;
                     m_ServiceToBusName.erase(itFind);
                     break;
                 }
@@ -178,32 +179,50 @@ pid_t CRecoverySchedulerStubImpl::queryUnixPidForBusName(const std::string &uniq
 
 bool CRecoverySchedulerStubImpl::run(std::shared_ptr<CRecoverySchedulerStubImpl> self, const std::string &domain, const std::string &instance)
 {
+    bool isOk     = true;
     auto lRuntime = CommonAPI::Runtime::get();
-    if (lRuntime)
+    if (!lRuntime)
     {
-        if (lRuntime->registerService(domain, instance, self))
+        isOk = false;
+        LOG_ERROR("SRSC", "CAPI", "CommonAPI::Runtime::get() returned null - cannot register service");
+    }
+    else
+    {
+        // DBusFactory::init() is guarded by isInitialized_ so it is safe to call
+        // unconditionally. This corrects a static-init ordering hazard in CAPI
+        // 3.2.3-r1: if Runtime::initFactories() ran before FactoryInit (the
+        // INITIALIZER in DBusFactory.cpp) registered the DBus factory as the
+        // defaultFactory_, Factory::init() was silently skipped and
+        // stubAdapterCreateFunctions_ is empty, causing registerService to fail.
+        CommonAPI::DBus::Factory::get()->init();
+
+        if (!lRuntime->registerService(domain, instance, self))
         {
-            LOG_INFO("SRSC", "CAPI", "CommonAPI service registered " << domain << ":" << instance);
+            isOk = false;
+            LOG_ERROR("SRSC", "CAPI", "registerService FAILED for " << domain << ":" << instance << " - check COMMONAPI_CONFIG points at fidl/commonapi4dbus.ini and that the routing key matches the versioned CAPI address (see fidl/commonapi4dbus.ini).");
+        }
+    }
+    if (isOk)
+    {
+        LOG_INFO("SRSC", "CAPI", "CommonAPI service registered " << domain << ":" << instance);
 
-            // Subscribe to org.freedesktop.DBus.NameOwnerChanged on the very same
-            // D-Bus connection CommonAPI already owns for this service.
-            auto lStubAdapter = std::dynamic_pointer_cast<CommonAPI::DBus::DBusStubAdapter>(self->getStubAdapter());
-            if (lStubAdapter)
+        // Subscribe to org.freedesktop.DBus.NameOwnerChanged on the very same
+        // D-Bus connection CommonAPI already owns for this service.
+        auto lStubAdapter = std::dynamic_pointer_cast<CommonAPI::DBus::DBusStubAdapter>(self->getStubAdapter());
+        if (lStubAdapter)
+        {
+            auto lDBusConn = lStubAdapter->getDBusConnection();
+            if (lDBusConn)
             {
-                auto lDBusConn = lStubAdapter->getDBusConnection();
-                if (lDBusConn)
-                {
-
-                    self->m_SignalConn = lDBusConn;
-                    self->m_SignalToken = lDBusConn->addSignalMemberHandler("/org/freedesktop/DBus",
-                                                                            "org.freedesktop.DBus",
-                                                                            "NameOwnerChanged",
-                                                                            "sss",
-                                                                            std::weak_ptr<CommonAPI::DBus::DBusProxyConnection::DBusSignalHandler>(self),
-                                                                            false);
-                }
+                self->m_SignalConn  = lDBusConn;
+                self->m_SignalToken = lDBusConn->addSignalMemberHandler("/org/freedesktop/DBus",
+                                                                        "org.freedesktop.DBus",
+                                                                        "NameOwnerChanged",
+                                                                        "sss",
+                                                                        std::weak_ptr<CommonAPI::DBus::DBusProxyConnection::DBusSignalHandler>(self),
+                                                                        false);
             }
         }
     }
-    return true;
+    return isOk;
 }

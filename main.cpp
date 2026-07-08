@@ -102,19 +102,25 @@ int main(int argc, char **argv)
 
     auto lpRecoveryScheduler = CRecoveryScheduler::getInstance();
     lpRecoveryScheduler->init();
-    lpRecoveryScheduler->run();
-
-    if (lbConsoleMode)
+    if (!lpRecoveryScheduler->run())
     {
-        std::thread lThread(consoleLoop, lpRecoveryScheduler);
-        lThread.join();
+        LOG_ERROR("SRSC", "MAIN", "scheduler failed to bring up CommonAPI service - aborting");
     }
     else
     {
-        LOG_INFO("SRSC", "MAIN", "running headless (pass 'mode=console' for interactive query)");
-        while (true)
+
+        if (lbConsoleMode)
         {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::thread lThread(consoleLoop, lpRecoveryScheduler);
+            lThread.join();
+        }
+        else
+        {
+            LOG_INFO("SRSC", "MAIN", "running headless (pass 'mode=console' for interactive query)");
+            while (true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
         }
     }
 
