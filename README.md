@@ -47,18 +47,29 @@ One entry point for all common workflows. Run from the repo root.
 ```
 ##on Terminal 1
 ```bash
+
 pwd = <path>/service-recovery-scheduler
 
 cd build
+eval "$(dbus-launch --sh-syntax)"
+echo "$DBUS_SESSION_BUS_ADDRESS" > /tmp/srs-bus     # share with other shells
+export COMMONAPI_CONFIG=$PWD/../fidl/commonapi4dbus.ini
+export COMMONAPI_DBUS_DEFAULT_CONFIG=$PWD/fidl/commonapi4dbus.ini
+
 ./app_srs
 or
 ./app_srs mode=console (to get service state)
 
 
-##on Terminal 2
+##on Terminal 2,3,4..
+
 ```bash
 
 cd build/other_apps_dummy
+
+export DBUS_SESSION_BUS_ADDRESS="$(cat /tmp/srs-bus)"
+export COMMONAPI_CONFIG=$PWD/../../fidl/commonapi4dbus.ini
+export COMMONAPI_DBUS_DEFAULT_CONFIG=$COMMONAPI_CONFIG
 ./appA
 -send signal Ctrl+c or Ctrl +\
 ./appB
