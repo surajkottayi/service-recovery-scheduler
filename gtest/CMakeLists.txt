@@ -42,6 +42,19 @@ if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_link_options(${PROJECT_NAME} PRIVATE --coverage)
 endif()
 
+# Must mirror lib_srs's sanitizer flags: service_recovery_scheduler is built
+# with -fsanitize=address, so any executable linking it must also be linked
+# with ASan to keep libasan.so first in the initial library list. Otherwise
+# the loader aborts with "ASan runtime does not come first ..." and
+# gtest_discover_tests fails at build time.
+if(ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        -O1 -g -fno-omit-frame-pointer
+        -fsanitize=address -fsanitize=undefined)
+    target_link_options(${PROJECT_NAME} PRIVATE
+        -fsanitize=address -fsanitize=undefined)
+endif()
+
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME})
 
