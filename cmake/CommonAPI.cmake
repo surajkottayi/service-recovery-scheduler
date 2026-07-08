@@ -434,6 +434,27 @@ function(commonapi_generate_stubs)
 
     add_custom_target(${CAG_TARGET}_generate DEPENDS ${stamp})
 
+    # If generated sources are absent (fresh clone / first configure) run the
+    # generators NOW at configure time so the GLOB below always finds them.
+    # The add_custom_command above takes care of incremental regeneration when
+    # the .fidl/.fdepl inputs change.
+    if(NOT EXISTS ${stamp})
+        message(STATUS "Running CommonAPI generators for ${CAG_TARGET} (first-time configure)…")
+        execute_process(
+            COMMAND ${COMMONAPI_CORE_GENERATOR} -sk -d ${core_out} ${CAG_FIDL}
+            RESULT_VARIABLE _gen_rc)
+        if(NOT _gen_rc EQUAL 0)
+            message(FATAL_ERROR "commonapi-core-generator failed (exit ${_gen_rc}) for ${CAG_FIDL}")
+        endif()
+        execute_process(
+            COMMAND ${COMMONAPI_DBUS_GENERATOR} -d ${dbus_out} ${CAG_FDEPL}
+            RESULT_VARIABLE _gen_rc)
+        if(NOT _gen_rc EQUAL 0)
+            message(FATAL_ERROR "commonapi-dbus-generator failed (exit ${_gen_rc}) for ${CAG_FDEPL}")
+        endif()
+        execute_process(COMMAND ${CMAKE_COMMAND} -E touch ${stamp})
+    endif()
+
     # Collect generated sources at build-time via GLOB CONFIGURE_DEPENDS so
     # newly generated files are picked up on rebuild.
     file(GLOB_RECURSE _gen_srcs CONFIGURE_DEPENDS

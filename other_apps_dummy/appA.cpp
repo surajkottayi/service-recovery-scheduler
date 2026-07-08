@@ -3,14 +3,17 @@
 // Enrolls itself with the scheduler and subscribes to state-change broadcasts.
 // Runtime routing is picked from $COMMONAPI_CONFIG (see fidl/commonapi4dbus.ini).
 
+#define COMMONAPI_INTERNAL_COMPILATION
 #include <CommonAPI/CommonAPI.hpp>
+#include <CommonAPI/DBus/DBusFactory.hpp>
+#undef COMMONAPI_INTERNAL_COMPILATION
 #include <v1/com/bmw/recovery/RecoverySchedulerProxy.hpp>
 
+#include "Common.hpp"
+#include "Logger.hpp"
 #include <chrono>
 #include <iostream>
 #include <thread>
-#include "Common.hpp"
-#include "Logger.hpp"
 using namespace lib_srs;
 
 namespace srs = ::v1::com::bmw::recovery;
@@ -18,8 +21,9 @@ namespace srs = ::v1::com::bmw::recovery;
 int main()
 {
     auto runtime = CommonAPI::Runtime::get();
+    CommonAPI::DBus::Factory::get()->init(); // guard against static-init race in CAPI 3.2.3-r1
     std::string lAppName = g_MapServiceNames[ServiceId::APP_A];
-    auto proxy = runtime->buildProxy<srs::RecoverySchedulerProxy>("local", "com.bmw.recovery.RecoveryScheduler", lAppName);
+    auto proxy           = runtime->buildProxy<srs::RecoverySchedulerProxy>("local", "com.bmw.recovery.RecoveryScheduler", lAppName);
 
     if (proxy)
     {
@@ -59,7 +63,7 @@ int main()
             LOG_INFO("APPA", "PUSH", "reportServiceState current=" << static_cast<int>(current) << " last=" << static_cast<int>(last) << " status=" << static_cast<int>(lPushStatus) << " result=" << static_cast<int>(lPushResult));
         };
 
-        auto lastState = srs::RecoveryScheduler::RecoveryState::UNKNOWN;
+        auto lastState    = srs::RecoveryScheduler::RecoveryState::UNKNOWN;
         auto currentState = srs::RecoveryScheduler::RecoveryState::RESTART;
         pushState(currentState, lastState);
 
