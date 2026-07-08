@@ -30,6 +30,14 @@ WORKDIR /src
 COPY scripts/bootstrap.sh scripts/bootstrap.sh
 RUN chmod +x scripts/bootstrap.sh && scripts/bootstrap.sh
 
+# patchelf lets us bake an RPATH into our own binaries pointing at the
+# patched libdbus in /opt, without polluting the global library search
+# path (which would break distro binaries like dbus-run-session that were
+# linked against a newer libdbus with symversions our 1.12 build lacks).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends patchelf \
+    && rm -rf /var/lib/apt/lists/*
+
 # Now bring in the rest of the tree and build a release, no-test image.
 COPY . .
 
@@ -52,6 +60,20 @@ RUN DESTDIR=/stage cmake --install build
 RUN mkdir -p /stage/opt/dbus-patched/lib \
     && cp -a build/dbus-patched/lib/libdbus-1.so* /stage/opt/dbus-patched/lib/
 
+# Bake /opt/dbus-patched/lib into RPATH of *our* binaries only, so the
+# dynamic loader finds the patched libdbus for app_srs / appA-C /
+# libCommonAPI-DBus.so, while the distro dbus-run-session keeps using
+# /usr/lib/x86_64-linux-gnu/libdbus-1.so.3 (its own newer libdbus).
+RUN set -eux; \
+    for bin in /stage/usr/bin/app_srs /stage/usr/bin/appA /stage/usr/bin/appB /stage/usr/bin/appC; do \
+        [ -f "$bin" ] && patchelf --force-rpath --set-rpath '$ORIGIN/../lib:/opt/dbus-patched/lib' "$bin"; \
+    done; \
+    for lib in /stage/usr/lib/libCommonAPI-DBus.so* /stage/usr/lib/libservice_recovery_scheduler.so*; do \
+        if [ -f "$lib" ] && [ ! -L "$lib" ]; then \
+            patchelf --force-rpath --set-rpath '$ORIGIN:/opt/dbus-patched/lib' "$lib"; \
+        fi; \
+    done
+
 # ---------------- runtime ---------------------------------------------------
 FROM debian:${DEBIAN_TAG} AS runtime
 
@@ -70,6 +92,7 @@ RUN apt-get update \
         libstdc++6 \
         libgcc-s1 \
         ca-certificates \
+        procps \
         tini \
     && rm -rf /var/lib/apt/lists/*
 
@@ -78,10 +101,15 @@ RUN apt-get update \
 # /etc/app_srs/commonapi4dbus.ini, /opt/dbus-patched/lib/*.
 COPY --from=builder /stage/ /
 
-# Make the patched libdbus discoverable ahead of the distro copy for any
-# binary that ships an rpath but was rebuilt without one.
-RUN echo "/opt/dbus-patched/lib" > /etc/ld.so.conf.d/00-dbus-patched.conf \
-    && ldconfig
+# NOTE: we deliberately do NOT add /opt/dbus-patched/lib to
+# /etc/ld.so.conf.d/. Doing so would make the patched (1.12) libdbus win
+# ahead of /usr/lib/x86_64-linux-gnu/libdbus-1.so.3 (1.14) for every
+# process in the container, and the distro dbus-run-session/dbus-daemon
+# binaries fail with `version LIBDBUS_PRIVATE_1.14.x not found` because
+# our older libdbus does not export those symversions. Instead, RPATH is
+# baked into app_srs/appA/appB/appC/libCommonAPI-DBus.so during the
+# builder stage (patchelf) so only our own binaries pick up the patched
+# libdbus.
 
 # Non-root user. app_srs doesn't need any elevated capability now that it
 # talks to a per-container session bus.

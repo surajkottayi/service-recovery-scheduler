@@ -14,6 +14,13 @@
 #                                 alongside app_srs on the same session bus so
 #                                 you can observe them communicating in one
 #                                 container. Default: none.
+#   SRS_CRASH_AFTER="N:client" -> after N seconds, SIGKILL the named client
+#                                 binary (must be in SRS_LAUNCH_CLIENTS). Used
+#                                 for demoing crash detection: the D-Bus
+#                                 daemon then emits NameOwnerChanged with an
+#                                 empty new_owner, app_srs marks the peer as
+#                                 CRASHED and increments crashCount.
+#                                 Example: SRS_CRASH_AFTER="6:appA"
 
 set -euo pipefail
 
@@ -53,6 +60,26 @@ run_stack() {
         client_pids+=($!)
     done
 
+    # Optional fault injection: SRS_CRASH_AFTER="6:appA" -> after 6s, SIGKILL
+    # every process named 'appA'. SIGKILL (not SIGTERM) simulates a real crash:
+    # the D-Bus daemon detects socket closure and emits NameOwnerChanged, which
+    # is what CRecoverySchedulerStubImpl subscribes to for CRASHED accounting.
+    if [[ -n "${SRS_CRASH_AFTER:-}" ]]; then
+        local delay="${SRS_CRASH_AFTER%%:*}"
+        local target="${SRS_CRASH_AFTER#*:}"
+        if [[ -z "$delay" || -z "$target" || "$delay" == "$SRS_CRASH_AFTER" ]]; then
+            echo "[srs-entrypoint] SRS_CRASH_AFTER=\"$SRS_CRASH_AFTER\" is not in the expected 'N:client' form, ignoring" >&2
+        else
+            (
+                sleep "$delay"
+                echo "[srs-entrypoint] ---- fault injection: SIGKILL '$target' (t+${delay}s) ----"
+                pkill -KILL -x "$target" \
+                    && echo "[srs-entrypoint] ---- killed; watch app_srs for CRASHED / NameOwnerChanged ----" \
+                    || echo "[srs-entrypoint] no process named '$target' found; is it in SRS_LAUNCH_CLIENTS?" >&2
+            ) &
+        fi
+    fi
+
     trap 'kill -TERM "$srs_pid" ${client_pids[@]:-} 2>/dev/null || true' TERM INT
     wait "$srs_pid"
     local rc=$?
@@ -62,7 +89,7 @@ run_stack() {
 
 # Export the helper so the subshell dbus-run-session spawns can invoke it.
 export -f run_stack
-export SRS_LAUNCH_CLIENTS SRS_ARGS SRS_CONSOLE
+export SRS_LAUNCH_CLIENTS SRS_ARGS SRS_CONSOLE SRS_CRASH_AFTER
 
 # dbus-run-session starts a fresh dbus-daemon --session, exports
 # DBUS_SESSION_BUS_ADDRESS, execs the given command, and reaps the daemon

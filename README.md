@@ -42,8 +42,31 @@ One entry point for all common workflows. Run from the repo root.
 ./build_srs.sh 2        # option 2: build + run unit tests + HTML coverage report
 ./build_srs.sh 3        # option 3: build with ASan+UBSan and run tests
 ./build_srs.sh 4        # option 4: release build + cpack (TGZ / DEB)
+./build_srs.sh 5        # option 5: Docker
 ./build_srs.sh -h       # help
 ```
+## on Terminal 1
+```bash
+pwd = <path>/service-recovery-scheduler
+
+cd build
+./app_srs
+or
+./app_srs mode=console (to get service state)
+
+## on Terminal 2
+```bash
+cd build/other_apps_dummy
+./appA
+-send signal Ctrl+c or Ctrl +\
+./appB
+-send signal Ctrl+c or Ctrl +\
+./appC
+-send signal Ctrl+c or Ctrl +\
+
+## Alternatively (docker)
+./build_srs.sh 5    
+
 
 - **Option 1 — Build.** Configures with `-DENABLE_COVERAGE=OFF -DBUILD_TESTING=ON` and builds every target (`app_srs`, `appA/B/C`, `lib_srs_tests`).
 - **Option 2 — UT.** Configures with `-DENABLE_COVERAGE=ON`, builds, runs `ctest --output-on-failure`, then produces `build/coverage/index.html` — a dashboard with overall coverage %, per-file drill-downs (green/red annotated source), and a table of every gtest case. Open the file in any browser.
