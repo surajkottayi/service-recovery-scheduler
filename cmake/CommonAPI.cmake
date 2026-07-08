@@ -245,6 +245,18 @@ endif()
 # picks it up in preference to the system libdbus-1.
 set(ENV{PKG_CONFIG_PATH} "${_dbus_prefix}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 
+# Ensure every executable/library defined from this point onward carries
+# ${_dbus_prefix}/lib in its DT_RUNPATH. DT_RUNPATH (unlike the legacy
+# DT_RPATH) is only consulted for the direct DT_NEEDED entries of the
+# object that owns it, so the RUNPATH we set on libCommonAPI-DBus.so alone
+# is not enough: consumers such as appA end up with libdbus-1.so.3 in
+# their own DT_NEEDED (via PkgConfig::DBUS) and, without this entry,
+# resolve it from /lib/x86_64-linux-gnu/ -- the system copy that lacks
+# the COVESA-patched symbols (dbus_message_get_body, ...) and aborts the
+# process with "symbol lookup error".
+list(APPEND CMAKE_BUILD_RPATH   "${_dbus_prefix}/lib")
+list(APPEND CMAKE_INSTALL_RPATH "${_dbus_prefix}/lib")
+
 # Tell CMake the patched-dbus lib dir is a known implicit link directory. Every
 # consumer of libdbus-1 otherwise triggers a "Cannot generate a safe runtime
 # search path" warning because our RPATH entry ${_dbus_prefix}/lib appears to
@@ -256,6 +268,21 @@ endif()
 # Now that dbus-1 (patched) is discoverable via pkg-config, wire the fetched
 # capicxx-dbus-runtime into the build.
 add_subdirectory(${capicxx_dbus_runtime_SOURCE_DIR} ${capicxx_dbus_runtime_BINARY_DIR})
+
+# capicxx-dbus-runtime calls dbus_message_get_body() and friends -- COVESA
+# additions that only exist in the patched libdbus we built into
+# ${_dbus_prefix}/lib. The DBus1 shim exposes libdbus-1 as an IMPORTED
+# INTERFACE target, so CMake can't infer an RPATH entry from it and
+# libCommonAPI-DBus.so ends up loading the system /lib/.../libdbus-1.so.3
+# at runtime -- which crashes with "undefined symbol: dbus_message_get_body".
+# Pin the patched lib directory into both build- and install-time RUNPATHs
+# so the loader always resolves libdbus-1 from our patched copy.
+if(TARGET CommonAPI-DBus)
+    set_property(TARGET CommonAPI-DBus APPEND PROPERTY
+        BUILD_RPATH "${_dbus_prefix}/lib")
+    set_property(TARGET CommonAPI-DBus APPEND PROPERTY
+        INSTALL_RPATH "${_dbus_prefix}/lib")
+endif()
 
 # Upstream targets are named CommonAPI and CommonAPI-DBus. Expose aliases so
 # consumers can link against a stable name from this project.
@@ -308,11 +335,35 @@ function(_capi_download_generator name url out_bin_var)
             message(FATAL_ERROR "Failed to download ${url}: ${_dl_msg}")
         endif()
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${zip}
+            COMMAND ${CMAKE_COMMAND} -E tar xf ${zip} --format=zip
             WORKING_DIRECTORY ${dest}
-            RESULT_VARIABLE _unzip_rc)
+            RESULT_VARIABLE _unzip_rc
+            OUTPUT_VARIABLE _unzip_out
+            ERROR_VARIABLE  _unzip_err)
+        # cmake -E tar's zip support depends on the bundled libarchive build
+        # and occasionally refuses valid zips ("Unrecognized archive format"
+        # on some CMake distributions). Fall back to the system `unzip` when
+        # available so we don't force users to reconfigure CMake.
         if(NOT _unzip_rc EQUAL 0)
-            message(FATAL_ERROR "Failed to unpack ${zip}")
+            find_program(_capi_unzip unzip)
+            if(_capi_unzip)
+                message(STATUS
+                    "cmake -E tar could not unpack ${zip} (${_unzip_err}); "
+                    "retrying with ${_capi_unzip}")
+                execute_process(
+                    COMMAND ${_capi_unzip} -q -o ${zip} -d ${dest}
+                    RESULT_VARIABLE _unzip_rc
+                    OUTPUT_VARIABLE _unzip_out
+                    ERROR_VARIABLE  _unzip_err)
+            endif()
+        endif()
+        if(NOT _unzip_rc EQUAL 0)
+            message(FATAL_ERROR
+                "Failed to unpack ${zip}\n"
+                "  stdout: ${_unzip_out}\n"
+                "  stderr: ${_unzip_err}\n"
+                "Install the 'unzip' package (scripts/bootstrap.sh does this "
+                "on Debian/Ubuntu) or verify the download at ${url}.")
         endif()
         file(REMOVE ${zip})
         file(TOUCH ${marker})
@@ -412,6 +463,19 @@ function(commonapi_generate_stubs)
         CommonAPI::Core
         CommonAPI::DBus
         PkgConfig::DBUS)
+
+    # libCommonAPI-DBus registers the "dbus" binding with CommonAPI::Runtime
+    # from a static constructor at .so load time. Consumers of this stub
+    # target rarely reference a libCommonAPI-DBus symbol *directly* (all the
+    # DBus-specific code lives inside the binding library itself), so the
+    # linker's default --as-needed pass drops libCommonAPI-DBus from the
+    # executable's DT_NEEDED list. The .so never gets loaded, the ctor never
+    # runs, Runtime::get()->buildProxy(...) returns nullptr, and the app
+    # exits silently. Force-keep the DT_NEEDED with --no-as-needed at the
+    # head of every downstream link line so the binding is always loaded.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_link_options(${CAG_TARGET} INTERFACE "LINKER:--no-as-needed")
+    endif()
 
     target_compile_features(${CAG_TARGET} PUBLIC cxx_std_17)
 endfunction()

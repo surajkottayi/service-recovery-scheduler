@@ -14,3 +14,9 @@ foreach(app appA appB appC)
     target_link_libraries(${app} PRIVATE srs_capi_stubs)
     target_include_directories(${app} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../lib_srs/inc)
 endforeach()
+
+# Install the dummy clients so the Docker image can launch them alongside
+# app_srs to demonstrate end-to-end CommonAPI/D-Bus communication.
+include(GNUInstallDirs)
+install(TARGETS appA appB appC
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

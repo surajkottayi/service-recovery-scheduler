@@ -6,6 +6,7 @@
 #   ./build_srs.sh 2         -> build with coverage + run UT + generate HTML report
 #   ./build_srs.sh 3         -> build with AddressSanitizer + UBSan + run UT
 #   ./build_srs.sh 4         -> build a release TGZ/DEB package via cpack
+#   ./build_srs.sh 5         -> build (and optionally run) a Docker image
 #   ./build_srs.sh -h        -> help
 #
 # All build artefacts land in ./build/  (repo-relative).
@@ -32,6 +33,7 @@ Usage: ./build_srs.sh [option]
   2   Build with coverage, run unit tests, generate HTML report
   3   Build with AddressSanitizer + UBSan and run unit tests
   4   Build a release package (cpack: TGZ + DEB when dpkg available)
+  5   Build a Docker image (multi-stage) and optionally run it
   h   Show this help
 
 If no option is given, an interactive menu is shown.
@@ -126,6 +128,39 @@ action_package() {
     ls -1 "$BUILD_DIR"/*.tar.gz "$BUILD_DIR"/*.deb 2>/dev/null || true
 }
 
+# Docker image build/deploy. Uses the repo Dockerfile (multi-stage: builder
+# compiles from source, runtime is a slim debian with just the daemon and
+# its shared libs). No dependency on the host $BUILD_DIR tree; the build
+# happens entirely inside the builder stage.
+action_docker() {
+    command -v docker >/dev/null 2>&1 \
+        || die "docker not found on PATH. Install Docker Engine first."
+    [[ -f Dockerfile ]] || die "Dockerfile missing at repo root."
+
+    local image_tag="${SRS_IMAGE:-service-recovery-scheduler:local}"
+    log "Building Docker image '$image_tag' (this pulls all build deps into the builder stage)"
+    docker build -t "$image_tag" .
+
+    printf '\n%sImage built:%s %s\n' "$c_green$c_bold" "$c_reset" "$image_tag"
+    docker image inspect --format \
+        'size={{.Size}}B  created={{.Created}}' "$image_tag" || true
+
+    local run_now="${SRS_DOCKER_RUN:-}"
+    if [[ -z "$run_now" ]]; then
+        read -r -p "Run the image now? [y/N]: " run_now || run_now="n"
+    fi
+    case "$run_now" in
+        y|Y|yes|1|true)
+            log "Starting container (Ctrl-C to stop)"
+            docker run --rm -it --name srs-local "$image_tag"
+            ;;
+        *)
+            printf '\nHint: docker run --rm -it %s\n' "$image_tag"
+            printf '      docker run --rm -it -e SRS_CONSOLE=1 %s   # interactive query loop\n' "$image_tag"
+            ;;
+    esac
+}
+
 pick_menu() {
     # Route menu text to stderr so `$(pick_menu)` in main() only captures the choice.
     {
@@ -134,11 +169,12 @@ pick_menu() {
         printf '  2) UT       (build + run tests + generate HTML coverage report)\n'
         printf '  3) Sanitize (build with ASan+UBSan and run tests)\n'
         printf '  4) Package  (release build + cpack TGZ/DEB)\n'
+        printf '  5) Docker   (build multi-stage image, optional run)\n'
         printf '  h) Help\n'
         printf '  q) Quit\n\n'
     } >&2
     local choice
-    read -r -p "Select [1/2/3/4/h/q]: " choice
+    read -r -p "Select [1/2/3/4/5/h/q]: " choice
     echo "$choice"
 }
 
@@ -152,6 +188,7 @@ main() {
         2|ut|UT|test)      action_ut ;;
         3|san|sanitize)    action_sanitize ;;
         4|pkg|package)     action_package ;;
+        5|docker)          action_docker ;;
         h|-h|--help)       usage ;;
         q|Q|quit|exit)     log "aborted"; exit 0 ;;
         *)                 usage; die "unknown option: $opt" ;;
