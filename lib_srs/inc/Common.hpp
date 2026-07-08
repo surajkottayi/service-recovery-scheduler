@@ -1,3 +1,14 @@
+/**
+ * @file  Common.hpp
+ * @brief Shared value types, enums and lookup tables used across the
+ *        service-recovery-scheduler library and its clients.
+ *
+ * The definitions here are intentionally header-only so both the daemon
+ * (@ref lib_srs::CRecoveryScheduler) and dummy clients under
+ * `other_apps_dummy/` can share the exact same @ref lib_srs::RecoveryState
+ * / @ref lib_srs::ServiceId vocabulary without pulling any transitive
+ * dependency on the CommonAPI generated headers.
+ */
 #ifndef Common_HPP
 #define Common_HPP
 #include <cstdint>
@@ -9,21 +20,36 @@
 #include <unordered_map>
 #include <vector>
 
+/// Public namespace for every symbol exported by libservice_recovery_scheduler.
 namespace lib_srs
 {
+    /// Upper bound for the fully-qualified D-Bus / CommonAPI service name.
     constexpr int MAX_SERVICE_NAME_LENGTH = 256;
-    constexpr int MAX_RECOVERY_ACTIONS    = 10;
-    constexpr int MAX_RECOVERY_INTERVAL   = 3600; // in seconds
+    /// Maximum number of recovery actions a client may register per service.
+    constexpr int MAX_RECOVERY_ACTIONS = 10;
+    /// Maximum inter-attempt back-off window a client may request, in seconds.
+    constexpr int MAX_RECOVERY_INTERVAL = 3600; // in seconds
 
+    /**
+     * @brief Lifecycle / recovery outcome for a monitored service.
+     *
+     * Values are stable u8 identifiers because they cross the D-Bus wire in
+     * `reportServiceState` and are persisted in @ref SServiceRecoveryInfo.
+     */
     enum class RecoveryState : uint8_t
     {
-        RESTART = 0,
-        STOP    = 1,
-        DISABLE = 2,
-        CRASHED = 3,
-        UNKNOWN = std::numeric_limits<uint8_t>::max()
+        RESTART = 0,                                  ///< Ask the peer to restart itself.
+        STOP    = 1,                                  ///< Ask the peer to stop cleanly.
+        DISABLE = 2,                                  ///< Take the peer offline and do not attempt recovery again.
+        CRASHED = 3,                                  ///< Peer disappeared unexpectedly (detected via `NameOwnerChanged`).
+        UNKNOWN = std::numeric_limits<uint8_t>::max() ///< Sentinel for uninitialised state.
     };
 
+    /**
+     * @brief Human-readable name for a @ref RecoveryState value.
+     * @param state Enumerator to render.
+     * @return Upper-case identifier matching the enumerator name.
+     */
     inline std::string toString(RecoveryState state)
     {
         std::string lStrRet = "";
@@ -48,10 +74,22 @@ namespace lib_srs
         return lStrRet;
     }
 
+    /**
+     * @brief Stream inserter so @ref RecoveryState works with `LOG_*` macros
+     *        and `std::cout`.
+     */
     inline std::ostream &operator<<(std::ostream &os, RecoveryState state)
     {
         return os << toString(state);
     }
+
+    /**
+     * @brief Fixed catalogue of well-known application identifiers.
+     *
+     * The numeric values are what a client would embed in a bus/instance name.
+     * @ref g_MapServiceNames provides the reverse lookup used by logging /
+     * introspection code.
+     */
     enum class ServiceId : uint32_t
     {
         APP_A       = 2100,
@@ -74,8 +112,15 @@ namespace lib_srs
         APP_R       = 2117,
         APP_S       = 2118,
         APP_T       = 2119,
-        APP_UNKNOWN = std::numeric_limits<uint32_t>::max()
+        APP_UNKNOWN = std::numeric_limits<uint32_t>::max() ///< Sentinel for unmapped ids.
     };
+
+    /**
+     * @brief Static id-to-name lookup for @ref ServiceId.
+     *
+     * @note `inline` at namespace scope gives every translation unit the same
+     * definition (C++17) so this can safely live in the header.
+     */
     inline std::map<ServiceId, std::string> g_MapServiceNames =
         {
             {ServiceId::APP_A, "AppA"},

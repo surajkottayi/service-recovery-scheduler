@@ -45,7 +45,7 @@ One entry point for all common workflows. Run from the repo root.
 ./build_srs.sh 5        # option 5: Docker
 ./build_srs.sh -h       # help
 ```
-## on Terminal 1
+##on Terminal 1
 ```bash
 pwd = <path>/service-recovery-scheduler
 
@@ -54,8 +54,10 @@ cd build
 or
 ./app_srs mode=console (to get service state)
 
-## on Terminal 2
+
+##on Terminal 2
 ```bash
+
 cd build/other_apps_dummy
 ./appA
 -send signal Ctrl+c or Ctrl +\
@@ -65,6 +67,7 @@ cd build/other_apps_dummy
 -send signal Ctrl+c or Ctrl +\
 
 ## Alternatively (docker)
+```bash
 ./build_srs.sh 5    
 
 
